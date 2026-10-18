@@ -1,0 +1,17 @@
+[Unit]
+Description=mkv-transcode one-shot scan of the incoming folder
+Documentation=file:///opt/mkv-transcode/doc/SYSTEMD.md
+
+[Service]
+Type=oneshot
+User=mkvtranscode
+Group=mkvtranscode
+Environment=MKVTC_CONFIG=/etc/mkv-transcode/config.toml
+# --wait keeps the service alive while a large rip is still copying.
+ExecStart=/usr/local/bin/mkv-transcode once --wait 1800
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full

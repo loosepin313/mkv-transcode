@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mkv-transcode"
+version = "0.1.0"
+description = "Transcode MakeMKV rips to AV1 or HEVC Matroska files with IMDb based names."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "charris" }]
+keywords = ["ffmpeg", "av1", "hevc", "matroska", "transcode", "jellyfin"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video",
+]
+
+# No runtime dependencies. The tool uses the Python standard library, ffmpeg and
+# ffprobe only. See docs/INSTALL.md for the RPM package list.
+dependencies = []
+
+[project.optional-dependencies]
+# Optional IMDb provider. The built-in IMDb dataset provider needs no package.
+imdbpy = ["imdbpy"]
+dev = ["pytest"]
+
+[project.scripts]
+mkv-transcode = "mkvtranscode.cli:main"
+
+[project.urls]
+Documentation = "https://github.com/charris/mkv-transcode/tree/main/docs"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mkvtranscode = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

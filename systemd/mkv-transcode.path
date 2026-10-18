@@ -1,0 +1,13 @@
+# Alternative to the long-running service.
+# systemd starts the oneshot scan service when a file appears in incoming.
+# Edit both paths so they match paths.incoming in the config file.
+[Unit]
+Description=Start an mkv-transcode scan when a new file lands in incoming
+
+[Path]
+PathExistsGlob=/data/incoming/*.mkv
+PathModified=/data/incoming
+Unit=mkv-transcode-scan.service
+
+[Install]
+WantedBy=multi-user.target

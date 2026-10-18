@@ -1,0 +1,127 @@
+# mkv-transcode configuration.
+# Copy this file to /etc/mkv-transcode/config.toml or to ./mkv-transcode.toml.
+# Every key is optional. See docs/CONFIGURATION.md for the full list.
+
+# Directories. 'incoming' holds the rips, 'transcoded' holds the library.
+[paths]
+incoming = "./incoming"
+transcoded = "./transcoded"
+work = ""
+logs = ""
+processed = ""
+imdb_data = "~/.local/share/mkv-transcode/imdb"
+
+# How the watcher finds complete files.
+[watch]
+mode = "auto"
+poll_interval = 5.0
+stable_seconds = 20.0
+check_open_files = true
+follow_subdirs = false
+rescan_seconds = 300.0
+extensions = ["mkv"]
+ignore_prefixes = [".", "_", "sample"]
+min_size_mb = 50.0
+
+# Video settings. profile picks av1, hevc, h264 or copy.
+[video]
+profile = "av1"
+deinterlace = "auto"
+tonemap = "auto"
+max_width = 0
+threads = 0
+target_size_gb = 0.0
+keep_chapters = true
+keep_metadata = true
+
+[video.av1]
+encoder = "libsvtav1"
+crf = 26
+preset = 4
+pixel_format = "yuv420p10le"
+quality_args = []
+extra_args = []
+
+[video.hevc]
+encoder = "libx265"
+crf = 20
+preset = "slow"
+pixel_format = "yuv420p10le"
+quality_args = []
+extra_args = ["x265-params=log-level=none"]
+
+[video.h264]
+encoder = "libx264"
+crf = 18
+preset = "slow"
+pixel_format = "yuv420p"
+quality_args = []
+extra_args = []
+
+# Audio policy. 'smart' copies compatible tracks and re-encodes the rest.
+[audio]
+policy = "smart"
+copy_codecs = ["ac3", "eac3", "aac", "opus", "mp3", "flac"]
+codec = "opus"
+bitrate_per_channel_bps = 64000
+min_bitrate_bps = 128000
+max_channels = 6
+downmix = "auto"
+loudnorm = false
+keep_commentary = true
+extra_args = []
+
+# Subtitle handling.
+[subtitles]
+copy = true
+default_track = "preferred"
+burn_in = false
+forced_only = false
+keep_image_tracks = true
+
+# Language rules. ffmpeg uses ISO 639-2/T codes such as 'eng'.
+[language]
+default = "eng"
+audio_prefer = ["eng"]
+subtitle_prefer = ["eng"]
+audio_keep = []
+subtitle_keep = []
+
+# Output layout under paths.transcoded.
+[naming]
+pattern = "{title} ({year})/{title} ({year}).mkv"
+episode_pattern = "{title} ({year})/{title} ({year}) - {episode}.mkv"
+use_original_title = false
+multi_part = true
+keep_source_on_conflict = true
+
+# IMDb lookup settings.
+[metadata]
+provider = "imdb"
+prefer_id_in_filename = true
+fallback_to_filename = true
+title_types = ["movie", "tvMovie", "video", "tvSpecial", "short"]
+include_akas = true
+akas_countries = ["XWW", "US", "GB"]
+
+# What to do with the finished file and the source file.
+[output]
+container = "mkv"
+overwrite = false
+delete_source = false
+move_source_to = ""
+write_report = true
+write_nfo = true
+min_output_ratio = 0.02
+max_duration_drift = 0.02
+
+# Runtime limits and logging.
+[job]
+max_parallel = 1
+max_attempts = 3
+nice = 10
+timeout_hours = 12.0
+min_free_gb = 10.0
+log_level = "info"
+keep_work_dir_on_error = true
+

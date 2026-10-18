@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration and data
+mkv-transcode.toml
+config.toml
+incoming/
+transcoded/
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp

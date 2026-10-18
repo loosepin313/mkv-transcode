@@ -1,0 +1,18 @@
+# User service. Install with: scripts/install.sh --user
+# This variant runs inside your own session, so it can write under /home.
+[Unit]
+Description=mkv-transcode incoming folder watcher (user session)
+Documentation=file:///opt/mkv-transcode/doc/SYSTEMD.md
+
+[Service]
+Type=simple
+Environment=MKVTC_CONFIG=%h/.config/mkv-transcode/config.toml
+ExecStart=/usr/local/bin/mkv-transcode run
+Restart=on-failure
+RestartSec=15
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=default.target

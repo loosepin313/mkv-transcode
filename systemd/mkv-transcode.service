@@ -1,0 +1,32 @@
+[Unit]
+Description=mkv-transcode incoming folder watcher
+Documentation=file:///opt/mkv-transcode/doc/SYSTEMD.md
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mkvtranscode
+Group=mkvtranscode
+Environment=MKVTC_CONFIG=/etc/mkv-transcode/config.toml
+ExecStart=/usr/local/bin/mkv-transcode run
+Restart=on-failure
+RestartSec=15
+
+# A batch encode must not make the machine slow.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# Hardening. Set ProtectHome=false when your media lives under /home.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

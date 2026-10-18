@@ -1,0 +1,13 @@
+# Run the pipeline on a timer instead of watching the folder.
+# Useful when the incoming folder sits on a remote mount.
+[Unit]
+Description=Run an mkv-transcode scan on a timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Unit=mkv-transcode-scan.service
+
+[Install]
+WantedBy=timers.target

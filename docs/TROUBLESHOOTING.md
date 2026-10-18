@@ -1,0 +1,202 @@
+# Troubleshooting
+
+Start with `mkv-transcode doctor`. It reports the common problems.
+
+## A file in incoming never starts
+
+Check these in order.
+
+1. Extension. `watch.extensions` defaults to `["mkv"]`.
+2. Name. `watch.ignore_prefixes` skips names that start with `.`, `_` or
+   `sample`.
+3. Size. `watch.min_size_mb` defaults to 50. A short film or a trailer can
+   fall below it.
+4. Stability. The size must stay unchanged for `watch.stable_seconds`.
+5. Open handle. Another process may still hold the file. `mkv-transcode list`
+   shows `copying` in that case.
+6. State. A file that already finished never runs again. Run
+   `mkv-transcode process --force FILE` to redo it.
+
+```bash
+mkv-transcode list
+mkv-transcode --log-level debug once
+```
+
+The debug log prints why a file is not ready.
+
+## ffmpeg: encoder not found
+
+```
+Unrecognized option 'crf'.
+```
+or
+```
+Unknown encoder 'libsvtav1'
+```
+
+Your ffmpeg build lacks the encoder. Fedora's `ffmpeg-free` package does not
+carry the patent-encumbered encoders. Install the RPM Fusion build:
+
+```bash
+sudo scripts/install-deps.sh --rpmfusion
+mkv-transcode doctor
+```
+
+## Output duration differs from the source
+
+```
+output duration 0m 07s differs from source 0m 08s by 5.0% (limit 2.0%).
+The source may be incomplete or damaged.
+```
+
+The source is truncated or damaged. This happens when the pipeline reads a
+file that a copy tool had not finished. Raise `watch.stable_seconds`, keep
+`watch.check_open_files = true`, and re-rip the disc.
+
+To accept a small drift, raise `output.max_duration_drift`.
+
+## Output is much smaller than expected
+
+```
+output check failed: output is 1.20% of the source, below output.min_output_ratio
+```
+
+A very noisy source, a mostly black film, or a wrong CRF can do this. Check
+the job log in `transcoded/.logs/`, then lower `output.min_output_ratio`.
+
+## The IMDb index is missing
+
+```
+IMDb index not found at ~/.local/share/mkv-transcode/imdb/imdb.sqlite.
+Run 'mkv-transcode imdb fetch' first.
+```
+
+Build it:
+
+```bash
+mkv-transcode imdb fetch
+```
+
+On a machine with no internet, download `title.basics.tsv.gz` and
+`title.akas.tsv.gz` elsewhere and use `--from-file` and `--akas-file`. See
+[METADATA.md](METADATA.md).
+
+## The wrong title was chosen
+
+Print what the tool sees:
+
+```bash
+mkv-transcode plan incoming/Some.Title.2024.mkv
+mkv-transcode imdb search "Some Title" --year 2024
+```
+
+Fix it by putting the IMDb id in the file name. An id always wins:
+
+```bash
+mv incoming/Some.Title.2024.mkv incoming/Some.Title.2024.tt1234567.mkv
+```
+
+## Permission denied when the service writes
+
+The system service runs as `mkvtranscode`. Give it the folders:
+
+```bash
+sudo chown -R mkvtranscode:mkvtranscode /data/incoming /data/library
+sudo chmod u+rwX /data/incoming /data/library
+```
+
+If the media lives under `/home`, the unit's `ProtectHome=read-only` blocks
+writes. Add the drop-in described in [SYSTEMD.md](SYSTEMD.md).
+
+## SELinux denies access
+
+Check the audit log:
+
+```bash
+sudo ausearch -m avc -ts recent
+sudo journalctl -u mkv-transcode -p err
+```
+
+Give the media folders a writable type, or run the per-user service instead.
+
+## inotify does not react
+
+Some NFS and FUSE mounts do not deliver inotify events. Force polling:
+
+```toml
+[watch]
+mode = "poll"
+poll_interval = 10
+```
+
+Check the kernel limit:
+
+```bash
+sysctl fs.inotify.max_user_watches
+```
+
+Raise it when many watchers compete:
+
+```bash
+echo 'fs.inotify.max_user_watches=524288' | sudo tee /etc/sysctl.d/99-inotify.conf
+sudo sysctl --system
+```
+
+## Encode is too slow
+
+Lower the preset, or cap the width:
+
+```toml
+[video.av1]
+preset = 6
+crf = 28
+
+[video]
+max_width = 1920
+```
+
+A hardware encoder is much faster. See [CODEC-CHOICE.md](CODEC-CHOICE.md).
+
+## Two-pass misses the target
+
+Short clips miss by a wide margin. For a feature, check the audio cost first:
+a 7.1 TrueHD track can take 1.5 Mbps on its own. Set `audio.policy =
+"transcode"` and a lower `audio.bitrate_per_channel_bps`.
+
+## The work folder keeps a partial file
+
+```toml
+[job]
+keep_work_dir_on_error = false
+```
+
+The tool then deletes the partial file after a failure.
+
+## ffmpeg ran too long
+
+```
+ffmpeg exceeded the timeout of 12.0 hours
+```
+
+Raise `job.timeout_hours`, lower the preset, or split the job.
+
+## Not enough free space
+
+```
+only 6.2 GiB free in /data/library, need 10.0 GiB
+```
+
+The tool refuses to start a job when free space is below
+`job.min_free_gb`, or below half the source size. Free space, or point
+`paths.work` at a larger file system. Keep `paths.work` on the same file
+system as `paths.transcoded` so the final move stays atomic.
+
+## How to read a job log
+
+```bash
+ls transcoded/.logs/
+tail -40 "transcoded/.logs/Alien.1979.1080p.BluRay.mkv.log"
+```
+
+The log holds the plan, the exact ffmpeg command, progress lines and the last
+ffmpeg messages. Copy the command and run it by hand to reproduce a failure.
