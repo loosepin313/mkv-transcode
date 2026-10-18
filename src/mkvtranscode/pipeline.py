@@ -214,8 +214,12 @@ class Pipeline:
 
         atomic_replace(work_path, output_path)
         outcome.output_size = os.path.getsize(output_path)
-        journal.log("wrote %s (%s, %.1f%% smaller)"
-                    % (output_path, human_size(outcome.output_size), _saved(stat.st_size, outcome.output_size)))
+        ratio = 100.0 * outcome.output_size / float(stat.st_size) if stat.st_size else 0.0
+        journal.log("wrote %s (%s, %.1f%% of the source)"
+                    % (output_path, human_size(outcome.output_size), ratio))
+        if outcome.output_size > stat.st_size:
+            journal.log("warning: the output is larger than the source. The source is "
+                        "already compressed, or the CRF is too low.")
 
         if config.output.write_nfo and title.confidence >= NFO_MIN_CONFIDENCE:
             nfo_path = os.path.splitext(output_path)[0] + ".nfo"
@@ -320,11 +324,11 @@ class Pipeline:
             self._write_report(outcome)
         if outcome.status == DONE:
             log.info(
-                "done: %s -> %s (%s, saved %.1f%%, %s)",
+                "done: %s -> %s (%s, %.1f%% of source, %s)",
                 os.path.basename(outcome.input),
                 os.path.relpath(outcome.output, self.config.paths.transcoded),
                 human_size(outcome.output_size),
-                outcome.saved_percent,
+                100.0 * outcome.output_size / float(outcome.source_size) if outcome.source_size else 0.0,
                 human_duration(outcome.seconds),
             )
 
@@ -345,12 +349,6 @@ def _tag(title: Title) -> str:
     if title.year:
         return "%s (%s)" % (title.title, title.year)
     return title.title
-
-
-def _saved(source: int, output: int) -> float:
-    if not source:
-        return 0.0
-    return (1.0 - output / float(source)) * 100.0
 
 
 def _tail(text: str, lines: int = 4) -> str:

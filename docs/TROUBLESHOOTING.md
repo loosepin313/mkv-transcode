@@ -55,6 +55,26 @@ file that a copy tool had not finished. Raise `watch.stable_seconds`, keep
 
 To accept a small drift, raise `output.max_duration_drift`.
 
+## Output is larger than the source
+
+```
+warning: the output is larger than the source. The source is already
+compressed, or the CRF is too low.
+```
+
+This happens when the input is not a disc remux. A file that already carries
+H.264 or HEVC video at a low bit rate can grow when you re-encode it at a low
+CRF. Check the source codec first:
+
+```bash
+ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,bit_rate \
+  -of default=nw=1 incoming/Some.File.mkv
+```
+
+For a disc remux, expect the output to land between 15% and 40% of the source.
+Raise `video.av1.crf` if the output is too big, or use `video.profile = "copy"`
+when you only want to clean up the tracks.
+
 ## Output is much smaller than expected
 
 ```

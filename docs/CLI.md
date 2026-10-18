@@ -67,7 +67,9 @@ mkv-transcode once
 mkv-transcode once --wait 1800
 ```
 
-`--wait` keeps the command running while a large rip is still copying.
+`--wait` bounds how long the command stays alive while a large rip is still
+copying. Without `--wait`, the bound is the larger of 60 seconds or six times
+`watch.stable_seconds`. The command logs the files it gave up on and exits 1.
 
 ### run
 

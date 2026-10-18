@@ -112,3 +112,39 @@ def test_non_media_files_are_ignored(config):
     touch(config, ".hidden.mkv")
     watcher._refresh_pending()
     assert watcher.pending == {}
+
+
+class StubProvider:
+    def status(self):
+        return "stub"
+
+
+def test_once_gives_up_on_a_file_that_never_settles(config, monkeypatch):
+    import subprocess
+
+    config.watch.mode = "poll"
+    config.watch.poll_interval = 0.5
+    config.watch.stable_seconds = 0.0
+    config.watch.check_open_files = True
+
+    path = touch(config, "Held.mkv")
+    handle = open(path, "rb")
+    child = subprocess.Popen(["sleep", "10"], stdin=handle)
+    handle.close()
+
+    watcher = make_watcher(config)
+    watcher.provider = StubProvider()
+    try:
+        code = watcher.run(once=True, wait_seconds=1.0)
+    finally:
+        child.terminate()
+        child.wait()
+
+    assert code == 1
+    assert watcher.pipeline.calls == []
+
+
+def test_once_exits_zero_when_nothing_is_pending(config):
+    watcher = make_watcher(config)
+    watcher.provider = StubProvider()
+    assert watcher.run(once=True, wait_seconds=1.0) == 0

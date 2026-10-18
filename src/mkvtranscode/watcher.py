@@ -81,7 +81,12 @@ class Watcher:
         log.info("watching %s (%s)", self.config.paths.incoming, mode)
         log.info("provider status: %s", self.provider.status())
 
-        deadline = time.time() + wait_seconds if wait_seconds else 0.0
+        # In 'once' mode, never wait forever. Use the caller's bound, or a
+        # default that covers a normal stability window.
+        deadline = 0.0
+        if once:
+            allowed = wait_seconds or max(60.0, self.config.watch.stable_seconds * 6)
+            deadline = time.time() + allowed
         try:
             while not self.stop_requested:
                 self._refresh_pending()
@@ -89,9 +94,10 @@ class Watcher:
                 if once:
                     if not self.pending and not self.running:
                         break
-                    if deadline and time.time() > deadline:
+                    if time.time() > deadline:
                         log.warning("waited %.0f seconds, giving up on: %s",
-                                    wait_seconds, ", ".join(sorted(self.pending)))
+                                    allowed, ", ".join(sorted(os.path.basename(p) for p in self.pending)))
+                        self.failures += 1
                         break
                 if watcher is not None:
                     self._step_inotify(watcher)
