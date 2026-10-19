@@ -77,7 +77,8 @@ def run_checks(config: Config) -> List[Check]:
     for label, path in (
         ("incoming", config.paths.incoming),
         ("transcoded", config.paths.transcoded),
-        ("work", config.paths.work),
+        ("processed", config.paths.processed),
+        ("workdir", config.paths.work),
         ("logs", config.paths.logs),
     ):
         checks.append(_directory_check(label, path, writable=label != "incoming"))
@@ -149,13 +150,17 @@ def _directory_check(label: str, path: str, writable: bool = True) -> Check:
 def _work_dir_check(config: Config) -> Check:
     """Report where the work dir lives compared with the library."""
     work, library = config.paths.work, config.paths.transcoded
+    missing = [name for name, path in (("workdir", work), ("transcoded", library))
+               if not os.path.isdir(path)]
+    if missing:
+        return Check(WARN, "workdir", "missing: " + ", ".join(missing))
     if same_device(work, library):
-        return Check(OK, "work dir", "%s shares the file system with the library" % work)
+        return Check(OK, "workdir", "%s shares the file system with the library" % work)
     fstype = mount_fstype(work) or "another file system"
     detail = "%s is on %s, the library is elsewhere; the final move copies the file" % (work, fstype)
     if fstype in ("tmpfs", "ramfs"):
-        return Check(WARN, "work dir", detail + ". %s uses RAM, a large film can fill it." % fstype)
-    return Check(WARN, "work dir", detail)
+        return Check(WARN, "workdir", detail + ". %s uses RAM, a large film can fill it." % fstype)
+    return Check(WARN, "workdir", detail)
 
 
 def _systemd_check() -> Check:

@@ -24,41 +24,49 @@ src/mkvtranscode/
 
 ## Data flow
 
+Stage 1 finds the file and names it:
+
 ```
 incoming/*.mkv
    |
    v
-scan.list_candidates      filter by extension, prefix and size
+scan.list_candidates      Filter by extension, prefix and size.
    |
    v
-scan.is_ready             size stable + no open file handle
+scan.is_ready             Size stable, no open file handle.
    |
    v
-probe.ffprobe             streams, colour tags, field order, duration
+probe.ffprobe             Streams, colour tags, field order, duration.
    |
    v
-naming.parse_filename     title, year, tt id, episode, part
+naming.parse_filename     Title, year, tt id, episode, part.
    |
    v
-metadata.resolve_title    IMDb id lookup, then title search, then fallback
+metadata.resolve_title    IMDb id lookup, then title search.
    |
    v
-naming.build_output_path  transcoded/Title (Year)/Title (Year).mkv
+naming.build_output_path  Path under transcoded.
+```
+
+Stage 2 encodes the file and places the result:
+
+```
+transcode.build_plan      Stream decisions, filters, quality flags.
    |
    v
-transcode.build_plan      stream decisions, filters, quality flags
+transcode.run_ffmpeg      One or two passes with nice and ionice.
    |
    v
-transcode.run_ffmpeg      one or two passes, nice + ionice wrapped
+verify + ffprobe          Size ratio, duration drift, stream count.
    |
    v
-verify + ffprobe          size ratio, duration drift, stream count
+final move                Work file to the library folder.
    |
    v
-atomic move               .work/<name>.work.mkv -> final path
+reports                   Log, JSON report, NFO, state row.
    |
    v
-reports                   .log, .json, optional .nfo, state row
+source move               The source file goes to processed.
 ```
 
 ## Why the plan builder maps by index
@@ -110,13 +118,19 @@ every core.
 ## State and reports on disk
 
 ```
-transcoded/
-  .state.sqlite          jobs and seen files
-  .work/                 partial output, empty between jobs
-  .logs/<name>.log       plan, command, progress, result
-  .logs/<name>.json      machine readable report
-  .processed/processed/  source files moved by output.move_source_to
+~/Videos/
+  incoming/              Waits for a transcode.
+  workdir/               Partial output. Empty between jobs.
+  processed/             Source files after a good run.
+  transcoded/
+    Title (Year)/        The finished file and its .nfo.
+    .state.sqlite        Jobs and seen files.
+    .logs/<name>.log     Plan, command, progress, result.
+    .logs/<name>.json    Machine readable report.
 ```
+
+`output.source_action` decides the last step. The default `processed` moves the
+source file. `keep` leaves it in `incoming`, and `delete` removes it.
 
 ## Extension points
 

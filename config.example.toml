@@ -2,7 +2,7 @@
 # Copy this file to /etc/mkv-transcode/config.toml or to ./mkv-transcode.toml.
 # Every key is optional. See docs/CONFIGURATION.md for the full list.
 
-# Directories. 'incoming' holds the rips, 'transcoded' holds the library.
+# Directories. incoming: the rips. transcoded: the library. processed: the source after a good run. work: partial output.
 [paths]
 incoming = "./incoming"
 transcoded = "./transcoded"
@@ -108,6 +108,7 @@ akas_countries = ["XWW", "US", "GB"]
 [output]
 container = "mkv"
 overwrite = false
+source_action = "processed"
 delete_source = false
 move_source_to = ""
 write_report = true
@@ -124,4 +125,3 @@ timeout_hours = 12.0
 min_free_gb = 10.0
 log_level = "info"
 keep_work_dir_on_error = true
-

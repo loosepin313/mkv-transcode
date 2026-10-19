@@ -16,12 +16,21 @@ def test_defaults_are_sane():
     assert config.naming.pattern.count("{title}") == 2
 
 
-def test_work_and_logs_derive_from_transcoded():
+def test_work_processed_and_logs_derive_from_transcoded():
     config = Config()
     config.paths.transcoded = "/data/library"
     config.resolve()
-    assert config.paths.work == "/data/library/.work"
+    assert config.paths.work == "/data/workdir"
+    assert config.paths.processed == "/data/processed"
     assert config.paths.logs == "/data/library/.logs"
+
+
+def test_paths_at_the_root_keep_a_hidden_fallback():
+    config = Config()
+    config.paths.transcoded = "/library"
+    config.resolve()
+    assert config.paths.work == "/library/.work"
+    assert config.paths.processed == "/library/.processed"
 
 
 def test_toml_overrides(tmp_path):

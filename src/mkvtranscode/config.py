@@ -27,15 +27,25 @@ VALID_SUBTITLE_DEFAULT = ("source", "preferred", "none")
 VALID_METADATA_PROVIDER = ("imdb", "imdbpy", "filename", "none")
 VALID_LOG_LEVELS = ("debug", "info", "warning", "error")
 VALID_PROFILES = ("av1", "hevc", "h264", "copy")
+# What happens to the source file after a successful job.
+VALID_SOURCE_ACTION = ("processed", "keep", "delete")
 
 
 @dataclass
 class PathConfig:
+    """The four working folders, plus logs and the IMDb index.
+
+    incoming   files waiting for a transcode
+    transcoded finished files, one folder per title
+    processed  the source file lands here after a good run
+    workdir    partial output while ffmpeg runs
+    """
+
     incoming: str = "./incoming"
     transcoded: str = "./transcoded"
-    work: str = ""            # empty means "<transcoded>/.work"
+    work: str = ""            # empty means "<parent of transcoded>/workdir"
     logs: str = ""            # empty means "<transcoded>/.logs"
-    processed: str = ""       # empty means "<transcoded>/.processed"
+    processed: str = ""       # empty means "<parent of transcoded>/processed"
     imdb_data: str = "~/.local/share/mkv-transcode/imdb"
 
 
@@ -154,8 +164,12 @@ class MetadataConfig:
 class OutputConfig:
     container: str = "mkv"
     overwrite: bool = False
-    delete_source: bool = False
-    move_source_to: str = ""           # e.g. "processed"; empty keeps the source
+    # processed = move the source to paths.processed, keep = leave it in
+    # incoming, delete = remove it. Keep the original unless you have a
+    # backup somewhere else.
+    source_action: str = "processed"
+    delete_source: bool = False          # legacy alias for source_action = "delete"
+    move_source_to: str = ""             # sub folder inside paths.processed, or an absolute path
     write_report: bool = True
     write_nfo: bool = True           # Jellyfin sidecar when the IMDb match is strong
     min_output_ratio: float = 0.02     # fail if the output is under 2% of source
@@ -262,7 +276,7 @@ class Config:
         self.paths.transcoded = expand(self.paths.transcoded)
         self.paths.imdb_data = expand(self.paths.imdb_data)
         if not self.paths.work:
-            self.paths.work = os.path.join(self.paths.transcoded, ".work")
+            self.paths.work = _sibling(self.paths.transcoded, "workdir", ".work")
         else:
             self.paths.work = expand(self.paths.work)
         if not self.paths.logs:
@@ -270,7 +284,7 @@ class Config:
         else:
             self.paths.logs = expand(self.paths.logs)
         if not self.paths.processed:
-            self.paths.processed = os.path.join(self.paths.transcoded, ".processed")
+            self.paths.processed = _sibling(self.paths.transcoded, "processed", ".processed")
         else:
             self.paths.processed = expand(self.paths.processed)
         self.watch.extensions = [ext.lstrip(".").lower() for ext in self.watch.extensions]
@@ -279,6 +293,7 @@ class Config:
     def validate(self) -> "Config":
         """Raise ConfigError when a value is out of range."""
         _one_of(self.watch.mode, VALID_WATCH_MODES, "watch.mode")
+        _one_of(self.output.source_action, VALID_SOURCE_ACTION, "output.source_action")
         _one_of(self.video.deinterlace, VALID_DEINTERLACE, "video.deinterlace")
         _one_of(self.video.tonemap, VALID_TONEMAP, "video.tonemap")
         _one_of(self.video.profile, VALID_PROFILES, "video.profile")
@@ -333,7 +348,9 @@ class Config:
             "config:      %s" % (self.source_file or "<defaults>"),
             "incoming:    %s" % self.paths.incoming,
             "transcoded:  %s" % self.paths.transcoded,
-            "work:        %s" % self.paths.work,
+            "processed:   %s" % self.paths.processed,
+            "workdir:     %s" % self.paths.work,
+            "logs:        %s" % self.paths.logs,
             "video:       %s (%s, crf=%s, preset=%s)"
             % (self.video.profile, profile.encoder, profile.crf, profile.preset),
             "audio:       %s -> %s (%d bps/channel, max %d channels)"
@@ -344,8 +361,9 @@ class Config:
                ",".join(self.language.subtitle_prefer) or "-"),
             "metadata:    %s" % self.metadata.provider,
             "naming:      %s" % self.naming.pattern,
-            "source:      delete=%s move=%s"
-            % (self.output.delete_source, self.output.move_source_to or "-"),
+            "source:      %s%s"
+            % (self.output.source_action,
+               " into %s" % self.output.move_source_to if self.output.move_source_to else ""),
         ]
         return lines
 
@@ -380,6 +398,14 @@ def _bind(target: Any, data: Dict[str, Any], prefix: str) -> None:
         if isinstance(raw, dict):
             raise ConfigError("%s must not be a table" % path)
         setattr(target, f.name, _coerce(current, raw, path))
+
+
+def _sibling(base_dir: str, name: str, fallback: str) -> str:
+    """Return <parent of base_dir>/<name>. Use fallback when there is no parent."""
+    parent = os.path.dirname(os.path.abspath(base_dir).rstrip(os.sep))
+    if not parent or parent == os.sep:
+        return os.path.join(base_dir, fallback)
+    return os.path.join(parent, name)
 
 
 def _coerce(current: Any, raw: Any, path: str) -> Any:

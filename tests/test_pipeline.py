@@ -119,7 +119,7 @@ def test_report_and_log_files_are_written(config, sample):
 
 
 @needs_ffmpeg
-def test_move_source_to_keeps_the_source_out_of_incoming(config, sample):
+def test_move_source_to_adds_a_sub_folder_inside_processed(config, sample):
     config.output.move_source_to = "processed"
     state = State(os.path.join(config.paths.transcoded, ".state.sqlite"))
     outcome = Pipeline(config, state).process(sample)
@@ -128,6 +128,26 @@ def test_move_source_to_keeps_the_source_out_of_incoming(config, sample):
     assert not os.path.exists(sample)
     moved = os.path.join(config.paths.processed, "processed")
     assert os.listdir(moved) == ["Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv"]
+
+
+@needs_ffmpeg
+def test_the_default_moves_the_source_to_processed(config, sample):
+    state = State(os.path.join(config.paths.transcoded, ".state.sqlite"))
+    outcome = Pipeline(config, state).process(sample)
+    state.close()
+    assert outcome.status == DONE
+    assert not os.path.exists(sample)
+    assert os.listdir(config.paths.processed) == ["Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv"]
+
+
+@needs_ffmpeg
+def test_source_action_keep_leaves_the_source_in_incoming(config, sample):
+    config.output.source_action = "keep"
+    state = State(os.path.join(config.paths.transcoded, ".state.sqlite"))
+    outcome = Pipeline(config, state).process(sample)
+    state.close()
+    assert outcome.status == DONE
+    assert os.path.exists(sample)
 
 
 @needs_ffmpeg

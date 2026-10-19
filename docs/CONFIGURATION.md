@@ -19,14 +19,23 @@ up.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `incoming` | `./incoming` | Folder that holds the rips. |
-| `transcoded` | `./transcoded` | Library root for the output. |
-| `work` | `<transcoded>/.work` | Partial output. Keep it on the same file system as `transcoded`. |
+| `incoming` | `./incoming` | Rips that wait for a transcode. |
+| `transcoded` | `./transcoded` | Library root for the finished files. |
+| `work` | `<parent of transcoded>/workdir` | Partial output. Keep it on the same file system as `transcoded`. |
 | `logs` | `<transcoded>/.logs` | Per-job log and JSON report. |
-| `processed` | `<transcoded>/.processed` | Where `output.move_source_to` puts source files. |
+| `processed` | `<parent of transcoded>/processed` | Source files after a good run. |
 | `imdb_data` | `~/.local/share/mkv-transcode/imdb` | IMDb index and downloads. |
 
 Paths accept `~`. The state file `.state.sqlite` lives in `transcoded`.
+
+The four working folders sit side by side by default:
+
+```
+~/Videos/incoming     waiting for a transcode
+~/Videos/workdir      partial output while ffmpeg runs
+~/Videos/transcoded   the finished library
+~/Videos/processed    the source, kept for you
+```
 
 ## [watch]
 
@@ -149,8 +158,9 @@ The default pattern puts the file in a folder with the same name. Placeholders:
 |-----|---------|---------|
 | `container` | `mkv` | Output container. The tool writes Matroska. |
 | `overwrite` | `false` | Replace an existing output file. |
-| `delete_source` | `false` | Delete the source after a successful job. |
-| `move_source_to` | `""` | Move the source here instead. A relative path sits under `paths.processed`. |
+| `source_action` | `processed` | `processed` moves the source to `paths.processed`. `keep` leaves it in `incoming`. `delete` removes it. |
+| `delete_source` | `false` | Legacy alias for `source_action = "delete"`. |
+| `move_source_to` | `""` | Sub folder inside `paths.processed`, or an absolute path. |
 | `write_report` | `true` | Write the JSON report. |
 | `write_nfo` | `true` | Write an NFO sidecar when the IMDb match is strong. |
 | `min_output_ratio` | `0.02` | Fail when the output is smaller than this fraction of the source. |

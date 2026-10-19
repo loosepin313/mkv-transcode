@@ -139,7 +139,7 @@ class Pipeline:
         stat = os.stat(path)
         outcome.source_size = stat.st_size
 
-        if not force and self.state and self.state.is_finished(path):
+        if not force and self.state and self.state.is_finished(path, stat.st_size):
             raise SkipFile("already processed in a previous run")
         if not force and stat.st_size < config.watch.min_size_mb * 1024 * 1024:
             raise SkipFile("smaller than watch.min_size_mb")
@@ -292,14 +292,20 @@ class Pipeline:
                     % (human_duration(out.duration), len(out.audios()), len(out.subtitles())))
 
     def _handle_source(self, path: str, journal) -> None:
+        """Move, keep or delete the source file after a successful job."""
         config = self.config
+        action = config.output.source_action
         if config.output.delete_source:
+            action = "delete"              # the legacy key still works
+        if action == "keep":
+            return
+        if action == "delete":
             os.unlink(path)
             journal.log("source deleted: %s" % path)
             return
-        target = config.output.move_source_to
-        if not target:
-            return
+        # An empty move_source_to means paths.processed. A relative name is a
+        # sub folder inside paths.processed.
+        target = config.output.move_source_to or config.paths.processed
         if not os.path.isabs(target):
             target = os.path.join(config.paths.processed, target)
         ensure_dir(target)

@@ -18,6 +18,21 @@ First release.
 - Verify every output before it enters the library.
 - systemd service, path unit and timer unit.
 
+### Changed
+
+- Four folders define the layout: `incoming`, `workdir`, `transcoded` and
+  `processed`. The defaults put them side by side.
+- `output.source_action` replaces the `delete_source` and `move_source_to`
+  pair. The default `processed` moves the source after a good run. The old
+  keys still work.
+- `mkv-transcode init --make-dirs` creates all four folders.
+- `doctor` checks `processed`, and names the work folder `workdir`.
+- `--processed` and `--work` override the two new paths.
+
+- Recognise a finished job after you move the folders. The match falls back
+  to the file name and the size.
+- `doctor` reports a missing work dir instead of a false file system warning.
+
 ### Fixed
 
 - Encode DTS and other `5.1(side)` tracks to Opus. ffmpeg rejects that layout,

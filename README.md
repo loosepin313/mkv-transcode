@@ -23,11 +23,41 @@ Then it builds the output file:
    re-encodes the rest to Opus.
 5. It keeps every subtitle track and marks the English track as the default.
 6. It writes the result to `transcoded/Title (Year)/Title (Year).mkv`.
+7. It moves the source file to `processed`, so you decide what to do with it.
 
 ```
 incoming/Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv
   -> transcoded/Alien (1979)/Alien (1979).mkv
+  -> processed/Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv
 ```
+
+## Folders
+
+The pipeline uses four folders. Keep them side by side:
+
+```
+~/Videos/mkv-transcode/
+  incoming/     the rip lands here
+  workdir/      partial output while ffmpeg runs
+  transcoded/   the finished file, one folder per title
+  processed/    the source file after a good run
+  imdb/         the IMDb index and downloads
+```
+
+Set them in the `[paths]` section:
+
+```toml
+[paths]
+incoming   = "~/Videos/mkv-transcode/incoming"
+work       = "~/Videos/mkv-transcode/workdir"
+transcoded = "~/Videos/mkv-transcode/transcoded"
+processed  = "~/Videos/mkv-transcode/processed"
+imdb_data  = "~/Videos/mkv-transcode/imdb"
+```
+
+Leave a value empty and the tool picks a folder next to `transcoded`. Put
+`workdir` on the same file system as `transcoded`. The final move is then a
+rename, and a long film cannot fill a small `/tmp`.
 
 ## Quick start
 

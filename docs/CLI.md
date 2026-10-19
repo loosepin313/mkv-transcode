@@ -14,6 +14,8 @@ mkv-transcode plan --profile hevc incoming/Alien.mkv
 | `-c, --config PATH` | Read this config file. |
 | `--incoming DIR` | Override `paths.incoming`. |
 | `--transcoded DIR` | Override `paths.transcoded`. |
+| `--processed DIR` | Override `paths.processed`. |
+| `--work DIR` | Override `paths.work`. |
 | `--profile {av1,hevc,h264,copy}` | Override `video.profile`. |
 | `--crf N` | Override the CRF of the active profile. |
 | `--preset VALUE` | Override the preset of the active profile. |

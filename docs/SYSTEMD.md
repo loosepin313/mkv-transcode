@@ -24,16 +24,22 @@ Set your paths in the config:
 
 ```toml
 [paths]
-incoming = "/data/incoming"
+incoming   = "/data/incoming"
+work       = "/data/workdir"
 transcoded = "/data/library"
+processed  = "/data/processed"
 ```
 
 Create the folders and give the service user access:
 
 ```bash
-sudo mkdir -p /data/incoming /data/library
-sudo chown -R mkvtranscode:mkvtranscode /data/incoming /data/library
+sudo mkdir -p /data/incoming /data/workdir /data/library /data/processed
+sudo chown -R mkvtranscode:mkvtranscode /data/incoming /data/workdir \
+  /data/library /data/processed
 ```
+
+The service sets `PrivateTmp=true`. A `work` path under `/tmp` then points at a
+private folder that dies with the job. Keep `work` inside your data folders.
 
 Start the service:
 

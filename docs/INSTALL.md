@@ -76,7 +76,28 @@ Per-user install with `pipx`:
 pipx install .
 ```
 
-## 4. IMDb index
+## 4. Folders
+
+The pipeline uses four folders. Put them on one file system:
+
+```bash
+mkdir -p ~/Videos/{incoming,workdir,transcoded,processed}
+```
+
+Point the config at them:
+
+```toml
+[paths]
+incoming   = "~/Videos/incoming"
+work       = "~/Videos/workdir"
+transcoded = "~/Videos/transcoded"
+processed  = "~/Videos/processed"
+```
+
+`mkv-transcode init --make-dirs` creates the four folders. Run
+`mkv-transcode doctor` to check that each one exists and is writable.
+
+## 5. IMDb index
 
 The metadata provider uses the free IMDb datasets. Build the index once:
 
@@ -90,7 +111,7 @@ The download is about 360 MB. The SQLite index is about 400 MB. See
 Skip this step if you set `metadata.provider = "filename"`. The tool then
 names files from the file name only.
 
-## 5. Firewall and SELinux
+## 6. Firewall and SELinux
 
 The tool opens no network ports. It only reads the IMDb datasets during
 `imdb fetch`. SELinux in enforcing mode does not block a service that writes
@@ -101,7 +122,7 @@ sudo semanage fcontext -a -t svirt_home_t '/data/media(/.*)?'
 sudo restorecon -Rv /data/media
 ```
 
-## 6. Uninstall
+## 7. Uninstall
 
 ```bash
 sudo make uninstall

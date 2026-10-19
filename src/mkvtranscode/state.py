@@ -122,11 +122,28 @@ class State:
         rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
         return {row["status"]: row["n"] for row in rows}
 
-    def is_finished(self, input_path: str) -> bool:
+    def is_finished(self, input_path: str, size: int = 0) -> bool:
+        """Return True when a done or skipped job covers this file.
+
+        The exact path is the normal match. When you move the folders, fall
+        back to the file name and the size. That stops a finished film from
+        encoding twice.
+        """
         row = self.conn.execute(
             "SELECT status FROM jobs WHERE input = ?", (input_path,)
         ).fetchone()
-        return bool(row and row["status"] in (DONE, SKIPPED))
+        if row and row["status"] in (DONE, SKIPPED):
+            return True
+        if not size:
+            return False
+        name = os.path.basename(input_path).replace("\\", "\\\\")
+        name = name.replace("%", "\\%").replace("_", "\\_")
+        row = self.conn.execute(
+            "SELECT status FROM jobs WHERE status IN (?, ?) AND source_size = ? "
+            "AND input LIKE ? ESCAPE '\\'",
+            (DONE, SKIPPED, size, "%" + name),
+        ).fetchone()
+        return bool(row)
 
     # ---- seen files ----------------------------------------------------
 

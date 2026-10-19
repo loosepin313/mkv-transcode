@@ -22,9 +22,9 @@ def config(tmp_path) -> Config:
     cfg = Config()
     cfg.paths.incoming = str(tmp_path / "incoming")
     cfg.paths.transcoded = str(tmp_path / "transcoded")
-    cfg.paths.work = str(tmp_path / "transcoded" / ".work")
+    cfg.paths.work = str(tmp_path / "workdir")
     cfg.paths.logs = str(tmp_path / "transcoded" / ".logs")
-    cfg.paths.processed = str(tmp_path / "transcoded" / ".processed")
+    cfg.paths.processed = str(tmp_path / "processed")
     cfg.paths.imdb_data = str(tmp_path / "imdb")
     cfg.watch.min_size_mb = 0.0
     cfg.watch.stable_seconds = 0.0
@@ -34,7 +34,8 @@ def config(tmp_path) -> Config:
     cfg.video.av1.crf = 45
     cfg.job.min_free_gb = 0.0
     cfg.resolve().validate()
-    for path in (cfg.paths.incoming, cfg.paths.transcoded, cfg.paths.work, cfg.paths.logs):
+    for path in (cfg.paths.incoming, cfg.paths.transcoded, cfg.paths.work,
+                 cfg.paths.logs, cfg.paths.processed):
         os.makedirs(path, exist_ok=True)
     return cfg
 

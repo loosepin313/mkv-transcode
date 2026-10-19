@@ -141,7 +141,7 @@ class Watcher:
 
     def _refresh_pending(self) -> None:
         for candidate in list_candidates(self.config):
-            if candidate.path in self.finished or self.state.is_finished(candidate.path):
+            if candidate.path in self.finished or self.state.is_finished(candidate.path, candidate.size):
                 continue
             self._add(candidate.path, candidate)
         for path in list(self.pending):
@@ -152,7 +152,7 @@ class Watcher:
     def _add(self, path: str, candidate: Optional[Candidate] = None) -> None:
         if path in self.running or path in self.pending or path in self.finished:
             return
-        if self.state.is_finished(path):
+        if self.state.is_finished(path, candidate.size if candidate else 0):
             self.finished.add(path)
             return
         from .scan import acceptable

@@ -167,6 +167,33 @@ job log shows:
 warning: the file name says 1999, IMDb says 1982. Check the match.
 ```
 
+## The source file left incoming
+
+The default `output.source_action = "processed"` moves the source to
+`paths.processed` after a good run. Find that folder with:
+
+```bash
+mkv-transcode config | grep processed
+```
+
+Set `source_action = "keep"` to leave the source in `incoming`. Set
+`source_action = "delete"` to remove it. Keep the original until you check the
+output.
+
+## A finished film encodes again after you move the folders
+
+The state file keys each job by its full input path. Move the folders and the
+keys go stale. The tool also matches on the file name and the size, so a
+finished film stays finished.
+
+If a re-encode still starts, stop the job and fix the paths:
+
+```bash
+sqlite3 transcoded/.state.sqlite \
+  "UPDATE jobs SET input = replace(input, '/old/', '/new/');"
+mkv-transcode list
+```
+
 ## Permission denied when the service writes
 
 The system service runs as `mkvtranscode`. Give it the folders:

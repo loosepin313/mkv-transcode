@@ -33,7 +33,8 @@ log = get_logger("cli")
 # The common flags use SUPPRESS so a subcommand cannot reset them. This table
 # supplies the missing attributes after parsing.
 COMMON_DEFAULTS = {
-    "config": None, "incoming": None, "transcoded": None, "profile": None,
+    "config": None, "incoming": None, "transcoded": None, "processed": None,
+    "work": None, "profile": None,
     "crf": None, "preset": None, "provider": None, "target_size_gb": None,
     "audio_codec": None, "audio_policy": None, "log_level": None, "dry_run": False,
 }
@@ -53,6 +54,8 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
                         help="path to the TOML config file")
     parser.add_argument("--incoming", default=argparse.SUPPRESS, help="override paths.incoming")
     parser.add_argument("--transcoded", default=argparse.SUPPRESS, help="override paths.transcoded")
+    parser.add_argument("--processed", default=argparse.SUPPRESS, help="override paths.processed")
+    parser.add_argument("--work", default=argparse.SUPPRESS, help="override paths.work")
     parser.add_argument("--profile", choices=["av1", "hevc", "h264", "copy"],
                         default=argparse.SUPPRESS, help="override video.profile")
     parser.add_argument("--crf", type=int, default=argparse.SUPPRESS,
@@ -136,7 +139,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = add("init", help="create directories and a config file")
     init.add_argument("--path", default="mkv-transcode.toml", help="config file to write")
-    init.add_argument("--make-dirs", action="store_true", help="also create incoming and transcoded")
+    init.add_argument("--make-dirs", action="store_true",
+                      help="also create incoming, transcoded, processed and workdir")
 
     return parser
 
@@ -147,6 +151,10 @@ def apply_overrides(config: Config, args: argparse.Namespace) -> Config:
         config.paths.incoming = args.incoming
     if args.transcoded:
         config.paths.transcoded = args.transcoded
+    if args.processed:
+        config.paths.processed = args.processed
+    if args.work:
+        config.paths.work = args.work
     if args.profile:
         config.video.profile = args.profile
     if args.provider:
@@ -399,7 +407,8 @@ def _cmd_init(config: Config, args: argparse.Namespace) -> int:
         handle.write(default_config_toml())
     print("wrote %s" % path)
     if args.make_dirs:
-        for directory in (config.paths.incoming, config.paths.transcoded):
+        for directory in (config.paths.incoming, config.paths.transcoded,
+                          config.paths.processed, config.paths.work):
             os.makedirs(directory, exist_ok=True)
             print("created %s" % directory)
     return EXIT_OK
@@ -408,7 +417,8 @@ def _cmd_init(config: Config, args: argparse.Namespace) -> int:
 # ---- default config text ----------------------------------------------
 
 _SECTION_COMMENTS = {
-    "paths": "Directories. 'incoming' holds the rips, 'transcoded' holds the library.",
+    "paths": "Directories. incoming: the rips. transcoded: the library. "
+             "processed: the source after a good run. work: partial output.",
     "watch": "How the watcher finds complete files.",
     "video": "Video settings. profile picks av1, hevc, h264 or copy.",
     "audio": "Audio policy. 'smart' copies compatible tracks and re-encodes the rest.",
