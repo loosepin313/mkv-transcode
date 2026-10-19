@@ -36,10 +36,10 @@ incoming/Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv
 The pipeline uses four folders. Keep them side by side:
 
 ```
-The defaults put every folder under `~/mkv-transcode`:
+The defaults keep every folder inside the checkout:
 
 ```
-~/mkv-transcode/
+<checkout>/
   incoming/     the rip lands here
   workdir/      partial output while ffmpeg runs
   transcoded/   the finished file, one folder per title
@@ -47,8 +47,9 @@ The defaults put every folder under `~/mkv-transcode`:
   imdb/         the IMDb index and downloads
 ```
 
-`mkv-transcode init --make-dirs` creates that tree. Point the paths somewhere
-else when your media lives on another disk:
+A relative path sits next to the config file, so the folders follow the
+checkout. `.gitignore` keeps these folders out of the repository. Move the data
+somewhere else with absolute paths:
 
 ```toml
 [paths]

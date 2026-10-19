@@ -182,7 +182,7 @@ the job log in `transcoded/.logs/`, then lower `output.min_output_ratio`.
 ## The IMDb index is missing
 
 ```
-IMDb index not found at ~/mkv-transcode/imdb/imdb.sqlite.
+IMDb index not found at imdb/imdb.sqlite.
 Run 'mkv-transcode imdb fetch' first.
 ```
 

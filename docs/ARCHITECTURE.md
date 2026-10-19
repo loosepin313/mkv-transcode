@@ -118,7 +118,7 @@ every core.
 ## State and reports on disk
 
 ```
-~/mkv-transcode/
+<checkout>/
   incoming/              Waits for a transcode.
   workdir/               Partial output. Empty between jobs.
   processed/             Source files after a good run.

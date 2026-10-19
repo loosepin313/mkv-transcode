@@ -19,26 +19,30 @@ up.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `incoming` | `~/mkv-transcode/incoming` | Rips that wait for a transcode. |
-| `transcoded` | `~/mkv-transcode/transcoded` | Library root for the finished files. |
+| `incoming` | `incoming` | Rips that wait for a transcode. |
+| `transcoded` | `transcoded` | Library root for the finished files. |
 | `work` | `<parent of transcoded>/workdir` | Partial output. Keep it on the same file system as `transcoded`. |
 | `logs` | `<transcoded>/.logs` | Per-job log and JSON report. |
 | `processed` | `<parent of transcoded>/processed` | Source files after a good run. |
-| `imdb_data` | `~/mkv-transcode/imdb` | IMDb index and downloads. |
+| `imdb_data` | `imdb` | IMDb index and downloads. |
 
 Paths accept `~`. The state file `.state.sqlite` lives in `transcoded`.
 
 The four working folders sit side by side by default:
 
+A relative path sits next to the config file, so a checkout keeps every folder
+inside its own folder:
+
 ```
-~/mkv-transcode/incoming     waiting for a transcode
-~/mkv-transcode/workdir      partial output while ffmpeg runs
-~/mkv-transcode/transcoded   the finished library
-~/mkv-transcode/processed    the source, kept for you
-~/mkv-transcode/imdb         the IMDb index and downloads
+<checkout>/incoming     waiting for a transcode
+<checkout>/workdir      partial output while ffmpeg runs
+<checkout>/transcoded   the finished library
+<checkout>/processed    the source, kept for you
+<checkout>/imdb         the IMDb index and downloads
 ```
 
-`mkv-transcode init --make-dirs` creates all five folders.
+`mkv-transcode init --make-dirs` creates all five folders. Write an absolute
+path, or a path that starts with `~`, to place a folder anywhere you like.
 
 ## [watch]
 

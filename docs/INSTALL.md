@@ -78,20 +78,20 @@ pipx install .
 
 ## 4. Folders
 
-The defaults put every folder under `~/mkv-transcode`. Create them with:
+The defaults keep every folder inside the checkout. Create them with:
 
 ```bash
 mkv-transcode init --make-dirs
 ```
 
-That command writes `mkv-transcode.toml` and creates five folders:
+That command writes `mkv-transcode.toml` and creates five folders next to it:
 
 ```
-~/mkv-transcode/incoming     waiting for a transcode
-~/mkv-transcode/workdir      partial output while ffmpeg runs
-~/mkv-transcode/transcoded   the finished library
-~/mkv-transcode/processed    the source, kept for you
-~/mkv-transcode/imdb         the IMDb index and downloads
+<checkout>/incoming     waiting for a transcode
+<checkout>/workdir      partial output while ffmpeg runs
+<checkout>/transcoded   the finished library
+<checkout>/processed    the source, kept for you
+<checkout>/imdb         the IMDb index and downloads
 ```
 
 Keep `workdir` on the same file system as `transcoded`. Point the paths at

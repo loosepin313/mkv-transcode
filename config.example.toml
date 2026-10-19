@@ -2,14 +2,14 @@
 # Copy this file to /etc/mkv-transcode/config.toml or to ./mkv-transcode.toml.
 # Every key is optional. See docs/CONFIGURATION.md for the full list.
 
-# Directories. incoming: the rips. transcoded: the library. processed: the source after a good run. work: partial output.
+# Directories. A relative path sits next to this config file. incoming: the rips. transcoded: the library. processed: the source after a good run. work: partial output. logs: job logs. imdb: the IMDb index.
 [paths]
-incoming = "~/mkv-transcode/incoming"
-transcoded = "~/mkv-transcode/transcoded"
-work = ""
-logs = ""
-processed = ""
-imdb_data = "~/mkv-transcode/imdb"
+incoming = "incoming"
+transcoded = "transcoded"
+work = "workdir"    # write "" to derive it from transcoded
+logs = "transcoded/.logs"    # write "" to derive it from transcoded
+processed = "processed"    # write "" to derive it from transcoded
+imdb_data = "imdb"
 
 # How the watcher finds complete files.
 [watch]

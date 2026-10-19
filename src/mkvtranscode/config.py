@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from . import toml_compat
 from .errors import ConfigError
-from .util import expand
+from .util import expand_in
 
 DEFAULT_CONFIG_NAMES = ("mkv-transcode.toml", "config.toml")
 ENV_CONFIG = "MKVTC_CONFIG"
@@ -31,14 +31,17 @@ VALID_PROFILES = ("av1", "hevc", "h264", "copy")
 VALID_SOURCE_ACTION = ("processed", "keep", "delete")
 
 
-# The default home for every working folder. 'mkv-transcode init --make-dirs'
-# builds this tree in the user's home directory.
-DEFAULT_ROOT = "~/mkv-transcode"
+# A checkout keeps its data together. Relative paths in the config resolve
+# against the folder that holds the config file, so every default folder lands
+# inside the repo folder.
+DEFAULT_INCOMING = "incoming"
+DEFAULT_TRANSCODED = "transcoded"
+DEFAULT_IMDB = "imdb"
 
 
 @dataclass
 class PathConfig:
-    """The working folders. The defaults put them all under ~/mkv-transcode.
+    """The working folders. Relative names sit next to the config file.
 
     incoming   files waiting for a transcode
     transcoded finished files, one folder per title
@@ -47,12 +50,12 @@ class PathConfig:
     imdb       the IMDb index and its downloads
     """
 
-    incoming: str = DEFAULT_ROOT + "/incoming"
-    transcoded: str = DEFAULT_ROOT + "/transcoded"
+    incoming: str = DEFAULT_INCOMING
+    transcoded: str = DEFAULT_TRANSCODED
     work: str = ""            # empty means "<parent of transcoded>/workdir"
     logs: str = ""            # empty means "<transcoded>/.logs"
     processed: str = ""       # empty means "<parent of transcoded>/processed"
-    imdb_data: str = DEFAULT_ROOT + "/imdb"
+    imdb_data: str = DEFAULT_IMDB
 
 
 @dataclass
@@ -277,22 +280,28 @@ class Config:
     # ---- resolution ----------------------------------------------------
 
     def resolve(self) -> "Config":
-        """Expand paths and fill the derived directories."""
-        self.paths.incoming = expand(self.paths.incoming)
-        self.paths.transcoded = expand(self.paths.transcoded)
-        self.paths.imdb_data = expand(self.paths.imdb_data)
+        """Expand paths and fill the derived directories.
+
+        A relative path sits next to the config file. A checkout therefore
+        keeps its data inside its own folder.
+        """
+        base = (os.path.dirname(os.path.abspath(self.source_file))
+                if self.source_file else os.getcwd())
+        self.paths.incoming = expand_in(self.paths.incoming, base)
+        self.paths.transcoded = expand_in(self.paths.transcoded, base)
+        self.paths.imdb_data = expand_in(self.paths.imdb_data, base)
         if not self.paths.work:
             self.paths.work = _sibling(self.paths.transcoded, "workdir", ".work")
         else:
-            self.paths.work = expand(self.paths.work)
+            self.paths.work = expand_in(self.paths.work, base)
         if not self.paths.logs:
             self.paths.logs = os.path.join(self.paths.transcoded, ".logs")
         else:
-            self.paths.logs = expand(self.paths.logs)
+            self.paths.logs = expand_in(self.paths.logs, base)
         if not self.paths.processed:
             self.paths.processed = _sibling(self.paths.transcoded, "processed", ".processed")
         else:
-            self.paths.processed = expand(self.paths.processed)
+            self.paths.processed = expand_in(self.paths.processed, base)
         self.watch.extensions = [ext.lstrip(".").lower() for ext in self.watch.extensions]
         return self
 

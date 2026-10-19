@@ -407,9 +407,12 @@ def _cmd_init(config: Config, args: argparse.Namespace) -> int:
         handle.write(default_config_toml())
     print("wrote %s" % path)
     if args.make_dirs:
-        for directory in (config.paths.incoming, config.paths.transcoded,
-                          config.paths.processed, config.paths.work,
-                          config.paths.imdb_data):
+        # Read the file just written. That anchors every relative folder to
+        # the config file, so a checkout keeps its data in its own folder.
+        fresh = Config.load(path)
+        for directory in (fresh.paths.incoming, fresh.paths.transcoded,
+                          fresh.paths.processed, fresh.paths.work,
+                          fresh.paths.imdb_data):
             os.makedirs(directory, exist_ok=True)
             print("created %s" % directory)
     return EXIT_OK
@@ -418,8 +421,10 @@ def _cmd_init(config: Config, args: argparse.Namespace) -> int:
 # ---- default config text ----------------------------------------------
 
 _SECTION_COMMENTS = {
-    "paths": "Directories. incoming: the rips. transcoded: the library. "
-             "processed: the source after a good run. work: partial output.",
+    "paths": "Directories. A relative path sits next to this config file. "
+             "incoming: the rips. transcoded: the library. processed: the source "
+             "after a good run. work: partial output. logs: job logs. "
+             "imdb: the IMDb index.",
     "watch": "How the watcher finds complete files.",
     "video": "Video settings. profile picks av1, hevc, h264 or copy.",
     "audio": "Audio policy. 'smart' copies compatible tracks and re-encodes the rest.",
@@ -429,6 +434,15 @@ _SECTION_COMMENTS = {
     "metadata": "IMDb lookup settings.",
     "output": "What to do with the finished file and the source file.",
     "job": "Runtime limits and logging.",
+}
+
+
+# The example file names every folder. The code leaves these three empty and
+# derives them from 'transcoded'. Write "" in your own config to do that.
+_EXAMPLE_PATHS = {
+    "work": "workdir",
+    "logs": "transcoded/.logs",
+    "processed": "processed",
 }
 
 
@@ -449,7 +463,12 @@ def default_config_toml() -> str:
         for f in fields(target):
             if is_dataclass(getattr(target, f.name)):
                 continue
-            lines.append("%s = %s" % (f.name, _toml_value(getattr(target, f.name))))
+            value = getattr(target, f.name)
+            if section == "paths" and f.name in _EXAMPLE_PATHS:
+                lines.append('%s = %s    # write "" to derive it from transcoded'
+                             % (f.name, _toml_value(_EXAMPLE_PATHS[f.name])))
+                continue
+            lines.append("%s = %s" % (f.name, _toml_value(value)))
         lines.append("")
         for f in fields(target):
             value = getattr(target, f.name)

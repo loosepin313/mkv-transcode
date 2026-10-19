@@ -64,6 +64,14 @@ def expand(path: str) -> str:
     return os.path.abspath(os.path.expanduser(path))
 
 
+def expand_in(path: str, base: str) -> str:
+    """Expand '~'. Anchor a relative path to base instead of the cwd."""
+    path = os.path.expanduser(path)
+    if not os.path.isabs(path):
+        path = os.path.join(base, path)
+    return os.path.abspath(path)
+
+
 def imdb_id_from_text(text: str) -> Optional[str]:
     """Return an IMDb id such as 'tt0111161' found in text, or None."""
     match = _IMDB_ID.search(text)

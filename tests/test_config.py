@@ -1,7 +1,5 @@
 """Tests for configuration loading, overrides and validation."""
 
-import os
-
 import pytest
 
 from mkvtranscode.config import Config
@@ -18,14 +16,23 @@ def test_defaults_are_sane():
     assert config.naming.pattern.count("{title}") == 2
 
 
-def test_defaults_put_every_folder_under_the_home_root():
+def test_defaults_keep_every_folder_in_one_root(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     config = Config().resolve()
-    root = os.path.expanduser("~/mkv-transcode")
-    assert config.paths.incoming == os.path.join(root, "incoming")
-    assert config.paths.transcoded == os.path.join(root, "transcoded")
-    assert config.paths.work == os.path.join(root, "workdir")
-    assert config.paths.processed == os.path.join(root, "processed")
-    assert config.paths.imdb_data == os.path.join(root, "imdb")
+    assert config.paths.incoming == str(tmp_path / "incoming")
+    assert config.paths.transcoded == str(tmp_path / "transcoded")
+    assert config.paths.work == str(tmp_path / "workdir")
+    assert config.paths.processed == str(tmp_path / "processed")
+    assert config.paths.imdb_data == str(tmp_path / "imdb")
+
+
+def test_relative_paths_sit_next_to_the_config_file(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('[paths]\nincoming = "rips"\n')
+    config = Config.load(str(path))
+    assert config.paths.incoming == str(tmp_path / "rips")
+    assert config.paths.transcoded == str(tmp_path / "transcoded")
+    assert config.paths.imdb_data == str(tmp_path / "imdb")
 
 
 def test_work_processed_and_logs_derive_from_transcoded():

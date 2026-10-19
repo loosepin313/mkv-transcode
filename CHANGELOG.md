@@ -20,9 +20,13 @@ First release.
 
 ### Changed
 
-- The defaults put every folder under `~/mkv-transcode`: `incoming`,
-  `workdir`, `transcoded`, `processed` and `imdb`.
+- A relative path now resolves next to the config file, so a checkout keeps
+  every folder inside its own folder.
+- The defaults name `incoming`, `transcoded`, `workdir`, `processed` and
+  `imdb` inside the checkout.
 - `mkv-transcode init --make-dirs` creates all five folders.
+- `.gitignore` excludes the data folders, so rips and the IMDb index cannot
+  enter the repository.
 - Four folders define the layout: `incoming`, `workdir`, `transcoded` and
   `processed`. The defaults put them side by side.
 - `output.source_action` replaces the `delete_source` and `move_source_to`
