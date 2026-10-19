@@ -16,7 +16,7 @@ from typing import List, Optional
 
 from .config import Config
 from .metadata import build_provider
-from .util import free_bytes, human_size, which
+from .util import free_bytes, human_size, mount_fstype, same_device, which
 
 OK, WARN, FAIL = "ok", "warn", "fail"
 
@@ -85,6 +85,7 @@ def run_checks(config: Config) -> List[Check]:
     free = free_bytes(config.paths.transcoded if os.path.isdir(config.paths.transcoded) else os.path.expanduser("~"))
     level = OK if free >= config.job.min_free_gb * 1024 ** 3 else WARN
     checks.append(Check(level, "free space", "%s free in %s" % (human_size(free), config.paths.transcoded)))
+    checks.append(_work_dir_check(config))
 
     from .inotify import supported
 
@@ -143,6 +144,18 @@ def _directory_check(label: str, path: str, writable: bool = True) -> Check:
     if writable and not os.access(path, os.W_OK):
         return Check(FAIL, label, "not writable: %s" % path)
     return Check(OK, label, path)
+
+
+def _work_dir_check(config: Config) -> Check:
+    """Report where the work dir lives compared with the library."""
+    work, library = config.paths.work, config.paths.transcoded
+    if same_device(work, library):
+        return Check(OK, "work dir", "%s shares the file system with the library" % work)
+    fstype = mount_fstype(work) or "another file system"
+    detail = "%s is on %s, the library is elsewhere; the final move copies the file" % (work, fstype)
+    if fstype in ("tmpfs", "ramfs"):
+        return Check(WARN, "work dir", detail + ". %s uses RAM, a large film can fill it." % fstype)
+    return Check(WARN, "work dir", detail)
 
 
 def _systemd_check() -> Check:

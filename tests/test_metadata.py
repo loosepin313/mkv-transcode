@@ -13,8 +13,8 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def test_fetch_builds_an_index_from_the_fixture(imdb_index):
     assert imdb_index.available()
-    assert imdb_index.count() == 4
-    assert "imdb index has 4 titles" in imdb_index.status()
+    assert imdb_index.count() == 7
+    assert "imdb index has 7 titles" in imdb_index.status()
 
 
 def test_lookup_by_id(imdb_index):
@@ -47,6 +47,24 @@ def test_alternative_title_search(imdb_index):
 
 def test_title_type_filter_excludes_series(imdb_index):
     assert imdb_index.lookup_id("tt2361573") is None
+
+
+def test_year_inside_the_title_still_finds_the_film(imdb_index):
+    # A rip named "Blade Runner (2049)" means the film "Blade Runner 2049".
+    found = imdb_index.search("Blade Runner", 2049)
+    assert found.imdb_id == "tt1856101"
+    assert found.year == 2017
+    assert found.confidence == 0.95
+
+
+def test_same_title_prefers_a_film_over_a_video(imdb_index):
+    assert imdb_index.search("Blade Runner").imdb_id == "tt0083658"
+
+
+def test_year_mismatch_lowers_confidence(imdb_index):
+    found = imdb_index.search("Alien", 1992)
+    assert found.imdb_id == "tt0078748"
+    assert found.confidence <= 0.7
 
 
 def test_missing_index_raises_a_helpful_error(tmp_path):

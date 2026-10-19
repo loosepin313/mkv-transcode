@@ -24,12 +24,13 @@ from .scan import is_ready, list_candidates
 from .state import DONE, FAILED, SKIPPED, JobRecord, State
 from .transcode import build_plan, run_ffmpeg, verify_output
 from .util import (
-    atomic_replace,
     cross_device_move,
     ensure_dir,
     free_bytes,
     human_duration,
     human_size,
+    mount_fstype,
+    same_device,
     sanitize_component,
 )
 
@@ -160,6 +161,9 @@ class Pipeline:
         outcome.year = title.year
         outcome.imdb_id = title.imdb_id or ""
         journal.log("named: %s (confidence %.2f)" % (title.summary(), title.confidence))
+        if guess.year and title.year and abs(guess.year - title.year) > 3:
+            journal.log("warning: the file name says %d, IMDb says %d. Check the match."
+                        % (guess.year, title.year))
 
         output_path = build_output_path(
             root=config.paths.transcoded,
@@ -205,6 +209,14 @@ class Pipeline:
         if self.state:
             self.state.start_job(record)
 
+        if not same_device(config.paths.work, config.paths.transcoded):
+            journal.log("warning: the work dir %s and the library %s are on different "
+                        "file systems. The final move copies the whole file."
+                        % (config.paths.work, config.paths.transcoded))
+            if mount_fstype(config.paths.work) in ("tmpfs", "ramfs"):
+                journal.log("warning: %s is %s, which uses RAM. A large film can fill it."
+                            % (config.paths.work, mount_fstype(config.paths.work)))
+
         self._execute(plan, info, journal)
 
         problem = verify_output(work_path, stat.st_size, config.output.min_output_ratio, info.duration)
@@ -212,7 +224,10 @@ class Pipeline:
             raise MkvTranscodeError("output check failed: %s" % problem)
         self._check_output_streams(work_path, info, journal)
 
-        atomic_replace(work_path, output_path)
+        cross_device_move(work_path, output_path)
+        if not same_device(config.paths.work, os.path.dirname(output_path)):
+            journal.log("copied the finished file from %s to the library. The two paths "
+                        "are on different file systems." % config.paths.work)
         outcome.output_size = os.path.getsize(output_path)
         ratio = 100.0 * outcome.output_size / float(stat.st_size) if stat.st_size else 0.0
         journal.log("wrote %s (%s, %.1f%% of the source)"

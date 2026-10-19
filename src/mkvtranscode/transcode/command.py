@@ -22,6 +22,16 @@ MAX_AAC_BITRATE = 320000
 AUDIO_ENCODERS = {"opus": "libopus", "aac": "aac", "libopus": "libopus"}
 # Codecs that no consumer plays without HDMI passthrough.
 LOSSLESS_AUDIO = ("truehd", "dts", "dtshd_ma", "dtshd_hsr", "pcm_s16le", "pcm_s24le", "alac")
+# ffmpeg's libopus encoder rejects these layouts: 2.1, 3.1, 5.1(side), 7.1(wide)
+# and 7.1(wide-side). It accepts the ones listed here.
+OPUS_LAYOUTS = frozenset((
+    "mono", "stereo", "3.0", "quad", "5.0", "5.0(side)", "5.1", "6.1", "6.1(side)", "7.1",
+))
+# Layout chosen from the channel count when the source layout is not usable.
+LAYOUT_BY_CHANNELS = {
+    1: "mono", 2: "stereo", 3: "3.0", 4: "quad",
+    5: "5.0", 6: "5.1", 7: "6.1", 8: "7.1",
+}
 
 
 @dataclass
@@ -39,6 +49,7 @@ class Decision:
     channels: int = 0
     downmix_to: int = 0
     audio_filter: str = ""
+    layout: str = ""
     default: bool = False
     language: Optional[str] = None
 
@@ -143,6 +154,8 @@ class Plan:
                 args += ["-b:a:%d" % decision.out_index, str(decision.bitrate)]
                 if decision.downmix_to:
                     args += ["-ac:a:%d" % decision.out_index, str(decision.downmix_to)]
+                if decision.layout:
+                    args += ["-channel_layout:a:%d" % decision.out_index, decision.layout]
                 if decision.audio_filter:
                     args += ["-af:a:%d" % decision.out_index, decision.audio_filter]
                 for extra in self.audio_extra_args:
@@ -334,6 +347,12 @@ def _decide_audio(config: Config, info: MediaInfo, notes: List[str]) -> List[Dec
                 downmix_to = config.audio.max_channels
                 channels = config.audio.max_channels
             bitrate = _audio_bitrate(config, codec, channels)
+            layout = _opus_layout(config, stream, channels)
+            if layout:
+                notes.append("audio #%d layout %s -> %s for the Opus encoder" % (
+                    stream.index, stream.channel_layout or "unknown", layout))
+        else:
+            layout = ""
         audio_filter = ""
         if action == "encode" and config.audio.loudnorm:
             audio_filter = "loudnorm=I=-23:TP=-2:LRA=11"
@@ -349,10 +368,21 @@ def _decide_audio(config: Config, info: MediaInfo, notes: List[str]) -> List[Dec
             channels=channels,
             downmix_to=downmix_to,
             audio_filter=audio_filter,
+            layout=layout,
             default=out_index == 0,
             language=stream.language,
         ))
     return decisions
+
+
+def _opus_layout(config: Config, stream: Stream, channels: int) -> str:
+    """Return a layout libopus accepts, or an empty string to keep the source."""
+    if config.audio.codec != "opus":
+        return ""
+    source = (stream.channel_layout or "").strip()
+    if source in OPUS_LAYOUTS:
+        return ""
+    return LAYOUT_BY_CHANNELS.get(channels, "stereo")
 
 
 def _audio_action(config: Config, stream: Stream):

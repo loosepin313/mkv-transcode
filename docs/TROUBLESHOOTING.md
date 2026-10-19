@@ -42,6 +42,47 @@ sudo scripts/install-deps.sh --rpmfusion
 mkv-transcode doctor
 ```
 
+## ffmpeg: Could not open encoder before EOF
+
+```
+[aost#0:1/libopus] Could not open encoder before EOF
+Task finished with error code: -22 (Invalid argument)
+```
+
+The audio encoder never received a frame. ffmpeg's libopus encoder rejects some
+channel layouts. `5.1(side)` is the common one, and DTS rips carry it.
+
+The plan now rewrites the layout before the encode. Check the plan output:
+
+```bash
+mkv-transcode plan incoming/Some.File.mkv | grep layout
+```
+
+A rewritten track shows a note such as `audio #1 layout 5.1(side) -> 5.1 for
+the Opus encoder`.
+
+## Job fails at the last step: Invalid cross-device link
+
+```
+OSError: [Errno 18] Invalid cross-device link:
+'/tmp/Film.mkv.work.mkv' -> '/data/library/Film (2020)/Film (2020).mkv'
+```
+
+The work dir and the library sit on different file systems. The tool copies the
+finished file and logs this line:
+
+```
+copied the finished file from /tmp to the library. The two paths are on
+different file systems.
+```
+
+Put `paths.work` inside the library for a fast rename. Fedora puts `/tmp` on
+tmpfs, so a work file there uses RAM. Check both locations:
+
+```bash
+mkv-transcode doctor | grep "work dir"
+```
+
 ## Output duration differs from the source
 
 ```
@@ -114,6 +155,16 @@ Fix it by putting the IMDb id in the file name. An id always wins:
 
 ```bash
 mv incoming/Some.Title.2024.mkv incoming/Some.Title.2024.tt1234567.mkv
+```
+
+The tool reads the year in the file name and uses it in two ways. A candidate
+with the same year wins. If no candidate matches, the tool tries the year as
+part of the title, so `Blade Runner (2049).mkv` finds `Blade Runner 2049`
+(2017). A candidate more than three years away gets a low confidence, and the
+job log shows:
+
+```
+warning: the file name says 1999, IMDb says 1982. Check the match.
 ```
 
 ## Permission denied when the service writes

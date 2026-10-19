@@ -92,20 +92,63 @@ def atomic_replace(src: str, dst: str) -> None:
     os.replace(src, dst)
 
 
-def cross_device_move(src: str, dst: str) -> None:
-    """Move a file, copying it when src and dst sit on different devices."""
+COPY_BLOCK = 8 * 1024 * 1024
+
+
+def same_device(src_dir: str, dst_dir: str) -> bool:
+    """Return True when both paths sit on the same filesystem."""
+    try:
+        return os.stat(src_dir).st_dev == os.stat(dst_dir).st_dev
+    except OSError:
+        return False
+
+
+def mount_fstype(path: str) -> str:
+    """Return the file system type that holds a path, or an empty string."""
+    path = os.path.abspath(path)
+    best, best_type = "", ""
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8") as handle:
+            for line in handle:
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                mount = parts[1].replace("\\040", " ")
+                if path == mount or path.startswith(mount.rstrip("/") + "/"):
+                    if len(mount) > len(best):
+                        best, best_type = mount, parts[2]
+    except OSError:
+        return ""
+    return best_type
+
+
+def cross_device_move(src: str, dst: str) -> bool:
+    """Move a file. Return True when the move needed a copy.
+
+    os.replace fails with EXDEV when the two paths sit on different
+    filesystems. Copy the file to a temporary name on the destination
+    filesystem, then rename it inside that filesystem.
+    """
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     try:
         os.replace(src, dst)
-        return
+        return False
     except OSError as exc:
         if exc.errno != errno.EXDEV:
             raise
     tmp = dst + ".part"
-    shutil.copyfile(src, tmp)
+    with open(src, "rb") as source, open(tmp, "wb") as target:
+        while True:
+            block = source.read(COPY_BLOCK)
+            if not block:
+                break
+            target.write(block)
+        target.flush()
+        os.fsync(target.fileno())
     shutil.copystat(src, tmp)
     os.replace(tmp, dst)
     os.unlink(src)
+    return True
 
 
 def free_bytes(path: str) -> int:

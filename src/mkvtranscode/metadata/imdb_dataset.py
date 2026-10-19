@@ -24,6 +24,21 @@ AKAS_URL = "https://datasets.imdbws.com/title.akas.tsv.gz"
 DB_NAME = "imdb.sqlite"
 BATCH = 5000
 
+# Rank title types so a film wins over a short or a bonus feature when
+# several entries share one name.
+TYPE_RANK = (
+    "CASE title_type "
+    "WHEN 'movie' THEN 0 WHEN 'tvSeries' THEN 1 WHEN 'tvMovie' THEN 2 "
+    "WHEN 'tvMiniSeries' THEN 3 WHEN 'video' THEN 6 WHEN 'short' THEN 7 "
+    "ELSE 4 END"
+)
+TYPE_BONUS = {
+    "movie": 0.06, "tvSeries": 0.05, "tvMovie": 0.04, "tvMiniSeries": 0.03,
+    "video": -0.06, "short": -0.08,
+}
+# A filename year further away than this marks a weak match.
+YEAR_TOLERANCE = 3
+
 # Column order used by the IMDb data files. The loader reads the header first
 # and falls back to this order when a name is missing.
 BASICS_SCHEMA = [
@@ -136,23 +151,44 @@ class ImdbDatasetProvider(Provider):
             conn.close()
 
     def _exact(self, conn, norm: str, year: Optional[int]) -> Optional[Title]:
-        sql = "SELECT * FROM titles WHERE (norm_primary = ? OR norm_original = ?)"
-        params: List[object] = [norm, norm]
+        # 1. Title and year both match.
         if year:
-            sql += " AND year = ?"
-            params.append(year)
-        sql += " ORDER BY year IS NULL, year DESC LIMIT 10"
-        rows = conn.execute(sql, params).fetchall()
-        if not rows and year:
-            rows = conn.execute(
-                "SELECT * FROM titles WHERE norm_primary = ? OR norm_original = ? "
-                "ORDER BY ABS(COALESCE(year, 0) - ?) LIMIT 10",
+            row = conn.execute(
+                "SELECT * FROM titles WHERE (norm_primary = ? OR norm_original = ?) "
+                "AND year = ? ORDER BY %s, year DESC LIMIT 1" % TYPE_RANK,
                 (norm, norm, year),
-            ).fetchall()
+            ).fetchone()
+            if row:
+                best = _title_from_row(row)
+                best.confidence = 1.0
+                return best
+            # 2. The year in the file name is part of the title, for example
+            # "Blade Runner (2049)", where IMDb lists "Blade Runner 2049".
+            combined = "%s %d" % (norm, year)
+            row = conn.execute(
+                "SELECT * FROM titles WHERE norm_primary = ? OR norm_original = ? "
+                "ORDER BY %s, year DESC LIMIT 1" % TYPE_RANK,
+                (combined, combined),
+            ).fetchone()
+            if row:
+                best = _title_from_row(row)
+                best.confidence = 0.95
+                return best
+        # 3. Only the title matches. Prefer films, then the closest year.
+        rows = conn.execute(
+            "SELECT * FROM titles WHERE norm_primary = ? OR norm_original = ? "
+            "ORDER BY %s, ABS(COALESCE(year, 0) - ?) LIMIT 5" % TYPE_RANK,
+            (norm, norm, year or 0),
+        ).fetchall()
         if not rows:
             return None
         best = _title_from_row(rows[0])
-        best.confidence = 1.0 if year else 0.9
+        if year and best.year and abs(best.year - year) > YEAR_TOLERANCE:
+            best.confidence = 0.7
+        elif year:
+            best.confidence = 0.85
+        else:
+            best.confidence = 0.9
         return best
 
     def _through_akas(self, conn, norm: str, year: Optional[int]) -> Optional[Title]:
@@ -164,7 +200,8 @@ class ImdbDatasetProvider(Provider):
         if year:
             sql += " AND t.year = ?"
             params.append(year)
-        sql += " ORDER BY t.year IS NULL, t.year DESC LIMIT 5"
+        sql += " ORDER BY %s, t.year IS NULL, t.year DESC LIMIT 5" % TYPE_RANK.replace(
+            "title_type", "t.title_type")
         try:
             rows = conn.execute(sql, params).fetchall()
         except sqlite3.Error:
@@ -198,6 +235,7 @@ class ImdbDatasetProvider(Provider):
                 if gap > 3:
                     continue
                 score -= gap * 0.02
+            score += TYPE_BONUS.get(candidate.title_type, 0.0)
             if score > best_score:
                 best_score, best = score, candidate
         if best is None or best_score < 0.80:

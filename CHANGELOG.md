@@ -17,3 +17,16 @@ First release.
 - Write a JSON report, a job log and an optional Jellyfin NFO sidecar.
 - Verify every output before it enters the library.
 - systemd service, path unit and timer unit.
+
+### Fixed
+
+- Encode DTS and other `5.1(side)` tracks to Opus. ffmpeg rejects that layout,
+  so the plan rewrites it to `5.1`.
+- Move the finished file when the work dir and the library sit on different
+  file systems. The move falls back to a copy.
+- Match a film when the year in the file name belongs to the title. `Blade
+  Runner (2049).mkv` now finds `Blade Runner 2049` (2017).
+- Prefer a film over a short or a bonus video when several IMDb entries share
+  one name.
+- Warn when the work dir and the library are on different file systems, and
+  when the work dir sits on tmpfs.

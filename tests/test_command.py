@@ -53,6 +53,26 @@ def test_map_uses_the_position_inside_the_stream_type(config):
     assert maps == ["0:v:0", "0:a:1", "0:a:2", "0:a:0", "0:s:0", "0:s:1"]
 
 
+def test_opus_gets_a_layout_the_encoder_accepts(config):
+    # ffmpeg's libopus rejects 5.1(side), which DTS rips carry.
+    plan = build_plan(config, info_for({3: {"channel_layout": "5.1(side)"}}), "/out/movie.mkv")
+    decision = [d for d in plan.audio if d.source_index == 3][0]
+    assert decision.layout == "5.1"
+    assert "-channel_layout:a:%d 5.1" % decision.out_index in " ".join(plan.command(0))
+
+
+def test_a_supported_layout_needs_no_change(config):
+    plan = build_plan(config, info_for({3: {"channel_layout": "5.1"}}), "/out/movie.mkv")
+    decision = [d for d in plan.audio if d.source_index == 3][0]
+    assert decision.layout == ""
+
+
+def test_aac_keeps_the_source_layout(config):
+    config.audio.codec = "aac"
+    plan = build_plan(config, info_for({3: {"channel_layout": "5.1(side)"}}), "/out/movie.mkv")
+    assert all(decision.layout == "" for decision in plan.audio)
+
+
 def test_seven_point_one_downmixes_to_six_channels(config):
     plan = build_plan(config, info_for(), "/out/movie.mkv")
     encoded = [d for d in plan.audio if d.action == "encode"]
