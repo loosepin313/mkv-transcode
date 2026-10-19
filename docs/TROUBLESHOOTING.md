@@ -92,6 +92,29 @@ ffprobe -v error -select_streams v:0 \
 The player also needs a decoder for the codec. AV1 needs libdav1d in VLC, and
 the dav1d GStreamer plugin in GNOME players.
 
+## VLC says: could not decode the format "bdpg"
+
+```
+VLC could not decode the format "bdpg" (BD PGS subtitles)
+```
+
+VLC 3.0 has no decoder for Blu-ray PGS subtitles. The video and the audio play.
+Only the subtitle track fails. Pick one option:
+
+- Turn subtitles off in the player: `vlc --no-spu <file>`.
+- Install VLC 4 from Flathub. It decodes PGS.
+- Set `subtitles.keep_image_tracks = false` to drop PGS and VobSub tracks from
+  new encodes. Jellyfin and mpv show PGS, so keep `true` if you use them.
+
+Check a player before you trust it:
+
+```bash
+mpv --no-config --ao=null --vo=null --start=60 --end=65 \
+  "transcoded/Title (Year)/Title (Year).mkv"
+```
+
+mpv exits 0 when it decodes the video, the audio and the subtitles.
+
 ## Job fails at the last step: Invalid cross-device link
 
 ```
