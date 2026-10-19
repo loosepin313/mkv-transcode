@@ -13,7 +13,9 @@ htmlcov/
 # Local configuration and pipeline data. These folders hold rips, output and
 # the IMDb index, so they must never enter the repository.
 mkv-transcode.toml
+mkv-transcode.toml.bak
 config.toml
+*.bak
 incoming/
 transcoded/
 processed/
