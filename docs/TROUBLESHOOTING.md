@@ -61,6 +61,37 @@ mkv-transcode plan incoming/Some.File.mkv | grep layout
 A rewritten track shows a note such as `audio #1 layout 5.1(side) -> 5.1 for
 the Opus encoder`.
 
+## VLC says: could not decode the format "mpgv"
+
+```
+Codec not supported:
+VLC could not decode the format "mpgv" (MPEG-1/2 Video)
+```
+
+The output file is usually fine. VLC lacks the Matroska demuxer plugin, so it
+reads the bytes as an MPEG program stream. Check for the plugin:
+
+```bash
+find /usr/lib64/vlc -name "libmkv_plugin.so"
+```
+
+Fedora ships that plugin in `vlc-plugins-extra`. Install it:
+
+```bash
+sudo dnf install vlc-plugins-extra
+```
+
+Confirm the file itself is sound:
+
+```bash
+ffprobe -v error -select_streams v:0 \
+  -show_entries stream=codec_name,profile,pix_fmt -of default=nw=1 \
+  "transcoded/Title (Year)/Title (Year).mkv"
+```
+
+The player also needs a decoder for the codec. AV1 needs libdav1d in VLC, and
+the dav1d GStreamer plugin in GNOME players.
+
 ## Job fails at the last step: Invalid cross-device link
 
 ```
