@@ -80,6 +80,16 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/mkv-transcode doctor
 ```
 
+You can also activate the environment and get a marked prompt. Source the
+helper, then run the commands with no path prefix:
+
+```bash
+source ./venv-activate.sh
+mkv-transcode doctor
+```
+
+See `docs/INSTALL.md` for a bash or zsh alias.
+
 Build the local IMDb index. This downloads about 360 MB, once.
 
 ```bash

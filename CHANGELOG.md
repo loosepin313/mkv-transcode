@@ -17,6 +17,9 @@ First release.
 - Write a JSON report, a job log and an optional Jellyfin NFO sidecar.
 - Verify every output before it enters the library.
 - systemd service, path unit and timer unit.
+- `venv-activate.sh` activates `.venv` and adds `mkv-transcode` to the shell
+  prompt. `deactivate` restores the prompt. `docs/INSTALL.md` shows a bash and
+  zsh alias for it.
 
 ### Changed
 

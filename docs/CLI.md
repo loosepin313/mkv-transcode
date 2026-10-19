@@ -7,6 +7,10 @@ mkv-transcode --profile hevc plan incoming/Alien.mkv
 mkv-transcode plan --profile hevc incoming/Alien.mkv
 ```
 
+Run the commands from an activated environment, or use the full path such as
+`.venv/bin/mkv-transcode`. `source ./venv-activate.sh` activates `.venv` and
+marks your prompt. See `docs/INSTALL.md`.
+
 ## Global flags
 
 | Flag | Effect |

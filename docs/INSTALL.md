@@ -70,6 +70,48 @@ make venv
 .venv/bin/mkv-transcode --help
 ```
 
+### Activate the environment
+
+`venv-activate.sh` activates `.venv` and puts `mkv-transcode` in your prompt.
+Source the file, because activation must change your own shell:
+
+```bash
+source ./venv-activate.sh
+```
+
+The prompt then shows the marker:
+
+```
+(mkv-transcode) $ mkv-transcode doctor
+```
+
+The script creates `.venv` when it does not exist. Set `MKVTC_VENV` to use a
+different environment folder. Run `deactivate` to leave the environment.
+
+Add an alias so you can enter the environment from any folder. Put this line in
+`~/.bashrc` or `~/.zshrc`. The syntax is the same in both shells:
+
+```bash
+alias mt='source ~/prj/mkv-transcode/venv-activate.sh'
+```
+
+Open a new shell, or reload the file:
+
+```bash
+source ~/.bashrc     # bash
+source ~/.zshrc      # zsh
+mt
+```
+
+A shell function works the same way, and keeps the folder in one place:
+
+```bash
+mt() { source "$HOME/prj/mkv-transcode/venv-activate.sh"; }
+```
+
+Use `source`, not a plain command. Only `source` can change the prompt and
+`PATH` of your shell.
+
 Per-user install with `pipx`:
 
 ```bash
