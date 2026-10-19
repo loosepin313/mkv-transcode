@@ -4,12 +4,12 @@
 
 # Directories. incoming: the rips. transcoded: the library. processed: the source after a good run. work: partial output.
 [paths]
-incoming = "./incoming"
-transcoded = "./transcoded"
+incoming = "~/mkv-transcode/incoming"
+transcoded = "~/mkv-transcode/transcoded"
 work = ""
 logs = ""
 processed = ""
-imdb_data = "~/.local/share/mkv-transcode/imdb"
+imdb_data = "~/mkv-transcode/imdb"
 
 # How the watcher finds complete files.
 [watch]

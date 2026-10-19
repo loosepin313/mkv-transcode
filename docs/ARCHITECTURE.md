@@ -118,10 +118,11 @@ every core.
 ## State and reports on disk
 
 ```
-~/Videos/
+~/mkv-transcode/
   incoming/              Waits for a transcode.
   workdir/               Partial output. Empty between jobs.
   processed/             Source files after a good run.
+  imdb/                  IMDb index and downloads.
   transcoded/
     Title (Year)/        The finished file and its .nfo.
     .state.sqlite        Jobs and seen files.

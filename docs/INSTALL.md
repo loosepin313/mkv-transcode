@@ -78,24 +78,35 @@ pipx install .
 
 ## 4. Folders
 
-The pipeline uses four folders. Put them on one file system:
+The defaults put every folder under `~/mkv-transcode`. Create them with:
 
 ```bash
-mkdir -p ~/Videos/{incoming,workdir,transcoded,processed}
+mkv-transcode init --make-dirs
 ```
 
-Point the config at them:
+That command writes `mkv-transcode.toml` and creates five folders:
+
+```
+~/mkv-transcode/incoming     waiting for a transcode
+~/mkv-transcode/workdir      partial output while ffmpeg runs
+~/mkv-transcode/transcoded   the finished library
+~/mkv-transcode/processed    the source, kept for you
+~/mkv-transcode/imdb         the IMDb index and downloads
+```
+
+Keep `workdir` on the same file system as `transcoded`. Point the paths at
+another disk when you need to:
 
 ```toml
 [paths]
-incoming   = "~/Videos/incoming"
-work       = "~/Videos/workdir"
-transcoded = "~/Videos/transcoded"
-processed  = "~/Videos/processed"
+incoming   = "/data/incoming"
+work       = "/data/workdir"
+transcoded = "/data/library"
+processed  = "/data/processed"
+imdb_data  = "/data/imdb"
 ```
 
-`mkv-transcode init --make-dirs` creates the four folders. Run
-`mkv-transcode doctor` to check that each one exists and is writable.
+Run `mkv-transcode doctor` to check that each folder exists and is writable.
 
 ## 5. IMDb index
 

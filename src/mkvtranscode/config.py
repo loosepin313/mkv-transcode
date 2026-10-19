@@ -31,22 +31,28 @@ VALID_PROFILES = ("av1", "hevc", "h264", "copy")
 VALID_SOURCE_ACTION = ("processed", "keep", "delete")
 
 
+# The default home for every working folder. 'mkv-transcode init --make-dirs'
+# builds this tree in the user's home directory.
+DEFAULT_ROOT = "~/mkv-transcode"
+
+
 @dataclass
 class PathConfig:
-    """The four working folders, plus logs and the IMDb index.
+    """The working folders. The defaults put them all under ~/mkv-transcode.
 
     incoming   files waiting for a transcode
     transcoded finished files, one folder per title
     processed  the source file lands here after a good run
     workdir    partial output while ffmpeg runs
+    imdb       the IMDb index and its downloads
     """
 
-    incoming: str = "./incoming"
-    transcoded: str = "./transcoded"
+    incoming: str = DEFAULT_ROOT + "/incoming"
+    transcoded: str = DEFAULT_ROOT + "/transcoded"
     work: str = ""            # empty means "<parent of transcoded>/workdir"
     logs: str = ""            # empty means "<transcoded>/.logs"
     processed: str = ""       # empty means "<parent of transcoded>/processed"
-    imdb_data: str = "~/.local/share/mkv-transcode/imdb"
+    imdb_data: str = DEFAULT_ROOT + "/imdb"
 
 
 @dataclass

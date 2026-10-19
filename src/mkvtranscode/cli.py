@@ -140,7 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     init = add("init", help="create directories and a config file")
     init.add_argument("--path", default="mkv-transcode.toml", help="config file to write")
     init.add_argument("--make-dirs", action="store_true",
-                      help="also create incoming, transcoded, processed and workdir")
+                      help="also create the folders under the configured root")
 
     return parser
 
@@ -408,7 +408,8 @@ def _cmd_init(config: Config, args: argparse.Namespace) -> int:
     print("wrote %s" % path)
     if args.make_dirs:
         for directory in (config.paths.incoming, config.paths.transcoded,
-                          config.paths.processed, config.paths.work):
+                          config.paths.processed, config.paths.work,
+                          config.paths.imdb_data):
             os.makedirs(directory, exist_ok=True)
             print("created %s" % directory)
     return EXIT_OK

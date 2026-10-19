@@ -1,5 +1,7 @@
 """Tests for configuration loading, overrides and validation."""
 
+import os
+
 import pytest
 
 from mkvtranscode.config import Config
@@ -14,6 +16,16 @@ def test_defaults_are_sane():
     assert config.audio.codec == "opus"
     assert config.output.container == "mkv"
     assert config.naming.pattern.count("{title}") == 2
+
+
+def test_defaults_put_every_folder_under_the_home_root():
+    config = Config().resolve()
+    root = os.path.expanduser("~/mkv-transcode")
+    assert config.paths.incoming == os.path.join(root, "incoming")
+    assert config.paths.transcoded == os.path.join(root, "transcoded")
+    assert config.paths.work == os.path.join(root, "workdir")
+    assert config.paths.processed == os.path.join(root, "processed")
+    assert config.paths.imdb_data == os.path.join(root, "imdb")
 
 
 def test_work_processed_and_logs_derive_from_transcoded():

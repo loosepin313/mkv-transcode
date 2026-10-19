@@ -36,7 +36,10 @@ incoming/Alien.1979.1080p.BluRay.DTS-HD.MA.5.1.mkv
 The pipeline uses four folders. Keep them side by side:
 
 ```
-~/Videos/mkv-transcode/
+The defaults put every folder under `~/mkv-transcode`:
+
+```
+~/mkv-transcode/
   incoming/     the rip lands here
   workdir/      partial output while ffmpeg runs
   transcoded/   the finished file, one folder per title
@@ -44,15 +47,16 @@ The pipeline uses four folders. Keep them side by side:
   imdb/         the IMDb index and downloads
 ```
 
-Set them in the `[paths]` section:
+`mkv-transcode init --make-dirs` creates that tree. Point the paths somewhere
+else when your media lives on another disk:
 
 ```toml
 [paths]
-incoming   = "~/Videos/mkv-transcode/incoming"
-work       = "~/Videos/mkv-transcode/workdir"
-transcoded = "~/Videos/mkv-transcode/transcoded"
-processed  = "~/Videos/mkv-transcode/processed"
-imdb_data  = "~/Videos/mkv-transcode/imdb"
+incoming   = "/data/incoming"
+work       = "/data/workdir"
+transcoded = "/data/library"
+processed  = "/data/processed"
+imdb_data  = "/data/imdb"
 ```
 
 Leave a value empty and the tool picks a folder next to `transcoded`. Put

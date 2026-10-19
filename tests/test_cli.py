@@ -89,6 +89,15 @@ def test_init_writes_a_config_file(tmp_path, capsys):
     assert main(["init", "--path", str(target)]) == 1
 
 
+def test_init_make_dirs_creates_the_default_tree(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "--path", "mkv-transcode.toml", "--make-dirs"]) == 0
+    root = tmp_path / "mkv-transcode"
+    for name in ("incoming", "transcoded", "processed", "workdir", "imdb"):
+        assert (root / name).is_dir(), name
+
+
 def test_config_command_prints_json(capsys):
     assert main(["config"]) == 0
     payload = json.loads(capsys.readouterr().out)
