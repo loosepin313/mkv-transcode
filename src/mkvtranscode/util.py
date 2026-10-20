@@ -94,6 +94,23 @@ def ensure_dir(path: str) -> str:
     return path
 
 
+def open_private(path: str, append: bool = False, buffering: int = -1):
+    """Open a text file for writing with owner-only mode (0600).
+
+    Job logs and JSON reports hold file names and full paths. Set the mode at
+    creation with os.open, then fchmod the descriptor. A chmod after open
+    would leave a short window where another user could read the file.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC)
+    handle = os.open(path, flags, 0o600)
+    try:
+        os.fchmod(handle, 0o600)
+    except OSError:
+        pass
+    return os.fdopen(handle, "a" if append else "w", encoding="utf-8",
+                     buffering=buffering)
+
+
 def atomic_replace(src: str, dst: str) -> None:
     """Move src onto dst so readers never see a partial file."""
     os.makedirs(os.path.dirname(dst), exist_ok=True)

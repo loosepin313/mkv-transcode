@@ -258,7 +258,8 @@ sudo chmod u+rwX /data/incoming /data/library
 ```
 
 If the media lives under `/home`, the unit's `ProtectHome=read-only` blocks
-writes. Add the drop-in described in [SYSTEMD.md](SYSTEMD.md).
+writes. Add the `ReadWritePaths` drop-in described in
+[SYSTEMD.md](SYSTEMD.md). Do not switch the unit to `ProtectHome=read-write`.
 
 ## SELinux denies access
 

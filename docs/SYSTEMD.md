@@ -63,13 +63,20 @@ Environment=MKVTC_VIDEO_PROFILE=hevc
 ### SELinux and home directories
 
 The unit sets `ProtectSystem=full` and `ProtectHome=read-only`. If your media
-lives under `/home`, add the shipped drop-in:
+lives under `/home`, add the shipped drop-in. It opens the media folders only,
+so the rest of `/home` stays read-only:
 
 ```bash
 sudo mkdir -p /etc/systemd/system/mkv-transcode.service.d
-sudo cp systemd/drop-ins/protect-home.conf /etc/systemd/system/mkv-transcode.service.d/
+sudo cp systemd/drop-ins/media-paths.conf /etc/systemd/system/mkv-transcode.service.d/
 sudo systemctl daemon-reload && sudo systemctl restart mkv-transcode
 ```
+
+Edit the folder list in that file so it matches `paths.incoming`, `paths.work`,
+`paths.transcoded` and `paths.processed` in your config.
+
+Do not set `ProtectHome=read-write`. That gives the service your whole home
+tree, including `~/.ssh` and `~/.config`.
 
 ## Style 2: path activation
 

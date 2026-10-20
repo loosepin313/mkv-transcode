@@ -11,6 +11,8 @@ import os
 import sys
 from typing import Optional
 
+from .util import open_private
+
 LOGGER_NAME = "mkv-transcode"
 FORMAT = "%(asctime)s %(levelname)-7s %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -48,7 +50,7 @@ class FileLog:
 
     def __enter__(self) -> "FileLog":
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self._handle = open(self.path, "a", buffering=1, encoding="utf-8")
+        self._handle = open_private(self.path, append=True, buffering=1)
         self.write("---- log started ----")
         return self
 

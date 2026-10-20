@@ -30,6 +30,7 @@ from .util import (
     human_duration,
     human_size,
     mount_fstype,
+    open_private,
     same_device,
     sanitize_component,
 )
@@ -134,9 +135,11 @@ class Pipeline:
 
     def _run(self, path: str, dry_run: bool, force: bool, outcome: Outcome, journal) -> None:
         config = self.config
+        if os.path.islink(path):
+            raise SkipFile("input is a symbolic link, not a file")
         if not os.path.isfile(path):
             raise SkipFile("file is gone")
-        stat = os.stat(path)
+        stat = os.lstat(path)
         outcome.source_size = stat.st_size
 
         if not force and self.state and self.state.is_finished(path, stat.st_size):
@@ -361,7 +364,7 @@ class Pipeline:
         payload = asdict(outcome)
         payload["saved_percent"] = round(outcome.saved_percent, 2)
         tmp = path + ".part"
-        with open(tmp, "w", encoding="utf-8") as handle:
+        with open_private(tmp) as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
         os.replace(tmp, path)
 

@@ -53,6 +53,8 @@ install-user:
 	sudo scripts/install.sh --user
 
 uninstall:
+	@test -n "$(PREFIX)" -a "$(PREFIX)" != "/" -a "$(PREFIX)" != "/opt" \
+	  || { echo "uninstall: refusing to remove '$(PREFIX)'"; exit 1; }
 	sudo rm -f /usr/local/bin/mkv-transcode
 	sudo rm -rf $(PREFIX)
 	sudo rm -f /etc/systemd/system/mkv-transcode.service \

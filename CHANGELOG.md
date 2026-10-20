@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Security and hardening.
+
+- The scanner and the pipeline now skip symbolic links. A link inside
+  `incoming` can no longer point a job at a file outside that folder.
+- Job logs and JSON reports are owner-only, mode `0600`.
+- The user service unit now carries the same hardening as the system unit.
+- The `/home` drop-in now uses `ReadWritePaths` for the media folders. It no
+  longer sets `ProtectHome=read-write`. The file is now `media-paths.conf`.
+- `imdb fetch` checks the gzip magic bytes before it builds the index.
+- `make uninstall` refuses to remove `/` or `/opt`.
+- Add `SECURITY.md` with a reporting channel and the trust model.
+
 ## 0.1.0
 
 First release.

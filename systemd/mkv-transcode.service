@@ -18,7 +18,8 @@ Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 
-# Hardening. Set ProtectHome=false when your media lives under /home.
+# Hardening. When your media lives under /home, keep ProtectHome=read-only
+# and add the ReadWritePaths drop-in from systemd/drop-ins/media-paths.conf.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

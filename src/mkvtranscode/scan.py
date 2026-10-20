@@ -7,6 +7,7 @@ the same for watch.stable_seconds and that no other process still holds open.
 from __future__ import annotations
 
 import os
+import stat
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -37,13 +38,20 @@ def list_candidates(config: Config, now: Optional[float] = None) -> List[Candida
     for path in _walk(root, config.watch.follow_subdirs):
         if not acceptable(path, config):
             continue
+        if os.path.islink(path):
+            # A symlink points outside incoming. Reject it again here, in case
+            # the file changed between the walk and this check.
+            log.debug("skip symlink: %s", path)
+            continue
         try:
-            stat = os.stat(path)
+            info = os.lstat(path)
         except OSError:
             continue
-        if stat.st_size < int(config.watch.min_size_mb * 1024 * 1024):
+        if not stat.S_ISREG(info.st_mode):
             continue
-        out.append(Candidate(path=path, size=stat.st_size, mtime=stat.st_mtime))
+        if info.st_size < int(config.watch.min_size_mb * 1024 * 1024):
+            continue
+        out.append(Candidate(path=path, size=info.st_size, mtime=info.st_mtime))
     out.sort(key=lambda item: (item.mtime, item.path))
     return out
 
@@ -67,17 +75,29 @@ def acceptable(path: str, config: Config) -> bool:
 
 
 def _walk(root: str, follow_subdirs: bool):
+    """Yield regular files under root. Skip symbolic links.
+
+    A symlink inside incoming would point the pipeline at a file the service
+    user can read anywhere on the machine. With output.source_action set to
+    'delete', the pipeline would then remove that file. Only real files under
+    incoming are eligible.
+    """
     if follow_subdirs:
-        for dirpath, dirnames, filenames in os.walk(root):
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
             dirnames[:] = [d for d in dirnames if not d.startswith(".")]
             for name in filenames:
-                yield os.path.join(dirpath, name)
+                path = os.path.join(dirpath, name)
+                if not os.path.islink(path):
+                    yield path
         return
     try:
         with os.scandir(root) as entries:
             for entry in entries:
                 try:
-                    if entry.is_file(follow_symlinks=True):
+                    if entry.is_symlink():
+                        log.debug("skip symlink: %s", entry.path)
+                        continue
+                    if entry.is_file(follow_symlinks=False):
                         yield entry.path
                 except OSError:
                     continue

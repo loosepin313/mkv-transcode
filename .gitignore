@@ -25,6 +25,10 @@ imdb/
 *.work.mkv
 *.log
 
+# The IMDb test fixtures are small samples of public IMDb data. The test suite
+# needs them, so re-include them even when a global ignore rule covers '*.gz'.
+!tests/fixtures/*.gz
+
 # Editors
 .vscode/
 .idea/

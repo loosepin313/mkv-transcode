@@ -97,3 +97,20 @@ def test_follow_subdirs_finds_nested_files(config):
     config.watch.min_size_mb = 0.1
     names = [os.path.basename(c.path) for c in list_candidates(config)]
     assert "Deep.mkv" in names
+
+
+def test_list_candidates_skips_a_symlink_to_a_file_outside_incoming(config, tmp_path):
+    outside = write(str(tmp_path / "outside.mkv"), size_kb=400)
+    os.symlink(outside, os.path.join(config.paths.incoming, "Alien.mkv"))
+    config.watch.min_size_mb = 0.1
+    assert list_candidates(config) == []
+
+
+def test_list_candidates_skips_a_symlinked_directory(config, tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    write(str(other / "Hidden.mkv"), size_kb=400)
+    os.symlink(str(other), os.path.join(config.paths.incoming, "linkdir"))
+    config.watch.follow_subdirs = True
+    config.watch.min_size_mb = 0.1
+    assert list_candidates(config) == []

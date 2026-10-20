@@ -58,6 +58,10 @@ path, or a path that starts with `~`, to place a folder anywhere you like.
 | `ignore_prefixes` | `[".", "_", "sample"]` | Skip names that start with these strings. |
 | `min_size_mb` | `50.0` | Skip files smaller than this. It blocks trailers. |
 
+The scanner skips symbolic links. It only accepts regular files that sit
+inside `paths.incoming`. A link cannot point the pipeline at a file somewhere
+else on the machine. See [SECURITY.md](../SECURITY.md).
+
 ## [video]
 
 | Key | Default | Meaning |

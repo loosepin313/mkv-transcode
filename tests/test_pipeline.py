@@ -188,3 +188,25 @@ def test_two_pass_hits_the_target_size(config, sample):
     assert outcome.status == DONE
     size = os.path.getsize(outcome.output)
     assert 1000000 < size < 4000000
+
+
+def test_process_skips_a_symlink_and_keeps_the_target(config):
+    target = os.path.join(config.paths.processed, "keep.mkv")
+    with open(target, "wb") as handle:
+        handle.write(b"x" * 4096)
+    link = os.path.join(config.paths.incoming, "Link.mkv")
+    os.symlink(target, link)
+
+    outcome = Pipeline(config).process(link)
+
+    assert outcome.status == SKIPPED
+    assert os.path.isfile(target)
+
+
+@needs_ffmpeg
+def test_job_log_and_report_are_owner_only(config, sample):
+    outcome = Pipeline(config).process(sample)
+
+    assert outcome.status == DONE
+    for path in (outcome.log_path, outcome.report_path):
+        assert os.stat(path).st_mode & 0o777 == 0o600

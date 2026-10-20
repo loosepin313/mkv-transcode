@@ -14,5 +14,20 @@ Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 
+# Hardening. A user service runs as you, so it cannot drop to another user.
+# These options still limit what a damaged process can reach.
+# Do not add ProtectHome: your media lives under $HOME.
+# Do not add PrivateDevices: it blocks /dev/dri for hardware encoders.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+LimitNOFILE=4096
+
 [Install]
 WantedBy=default.target

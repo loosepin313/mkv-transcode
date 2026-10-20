@@ -161,6 +161,7 @@ The `hevc` and `h264` profiles exist for older players. See
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules and data flow.
 - [docs/CLI.md](docs/CLI.md) — command and flag reference.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures.
+- [SECURITY.md](SECURITY.md) — how to report a problem, and what the tool trusts.
 
 ## Tests
 

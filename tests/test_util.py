@@ -72,3 +72,21 @@ def test_same_device_compares_two_directories(tmp_path):
 
 def test_mount_fstype_reports_a_real_filesystem():
     assert util.mount_fstype("/") != ""
+
+
+def test_open_private_creates_an_owner_only_file(tmp_path):
+    path = str(tmp_path / "job.log")
+    with util.open_private(path, append=True, buffering=1) as handle:
+        handle.write("line\n")
+    assert os.stat(path).st_mode & 0o777 == 0o600
+
+
+def test_open_private_tightens_an_existing_file(tmp_path):
+    path = str(tmp_path / "job.log")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("old\n")
+    os.chmod(path, 0o644)
+    with util.open_private(path, append=True) as handle:
+        handle.write("new\n")
+    assert os.stat(path).st_mode & 0o777 == 0o600
+    assert open(path, encoding="utf-8").read() == "old\nnew\n"

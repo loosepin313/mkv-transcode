@@ -21,6 +21,7 @@ from .types import Provider, Title
 
 BASICS_URL = "https://datasets.imdbws.com/title.basics.tsv.gz"
 AKAS_URL = "https://datasets.imdbws.com/title.akas.tsv.gz"
+GZIP_MAGIC = b"\x1f\x8b"
 DB_NAME = "imdb.sqlite"
 BATCH = 5000
 
@@ -443,6 +444,15 @@ def _download(url: str, directory: str, name: str, say, timeout: int) -> str:
             os.unlink(tmp)
         raise MetadataError("download failed for %s: %s" % (url, exc))
     os.replace(tmp, target)
+    # IMDb serves gzip data. A proxy error page or a truncated transfer also
+    # saves cleanly, so check the two gzip magic bytes before the index build
+    # reports a confusing parse failure.
+    with open(target, "rb") as handle:
+        if handle.read(2) != GZIP_MAGIC:
+            os.unlink(target)
+            raise MetadataError(
+                "%s is not a gzip file. The server sent something else." % name
+            )
     say("saved %s (%s)" % (target, human_size(os.path.getsize(target))))
     return target
 
