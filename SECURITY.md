@@ -13,7 +13,7 @@ Do not open a public issue with the details of a security problem.
 
 Use GitHub private vulnerability reporting:
 
-<https://github.com/charris/mkv-transcode/security/advisories/new>
+<https://github.com/loosepin313/mkv-transcode/security/advisories/new>
 
 That page works only after the repository owner enables the feature. If the
 page shows an error, use the fallback:

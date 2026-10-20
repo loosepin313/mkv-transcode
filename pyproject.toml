@@ -32,7 +32,7 @@ dev = ["pytest"]
 mkv-transcode = "mkvtranscode.cli:main"
 
 [project.urls]
-Documentation = "https://github.com/charris/mkv-transcode/tree/main/docs"
+Documentation = "https://github.com/loosepin313/mkv-transcode/tree/main/docs"
 
 [tool.setuptools.packages.find]
 where = ["src"]
