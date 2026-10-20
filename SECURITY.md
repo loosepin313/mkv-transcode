@@ -9,20 +9,35 @@
 
 ## Report a vulnerability
 
-Do not open a public issue for a security problem. Use GitHub private
-vulnerability reporting on the repository page:
+Do not open a public issue with the details of a security problem.
 
-**Security** tab, then **Report a vulnerability**.
+Use GitHub private vulnerability reporting:
 
-Include these items:
+<https://github.com/charris/mkv-transcode/security/advisories/new>
+
+That page works only after the repository owner enables the feature. If the
+page shows an error, use the fallback:
+
+1. Open a normal issue with the title `Security`.
+2. Write one line: "I found a security problem. Please open a private
+   channel."
+3. Do not include the flaw, the exploit, the version, or the file name.
+
+The owner then replies with a private way to send the details, and hides the
+public comments.
+
+There is no security email address. GitHub does not accept mail sent to a
+`users.noreply.github.com` address, so any such address would bounce.
+
+Include these items once you have a private channel:
 
 - The version, from `mkv-transcode --version`.
 - The distribution and the ffmpeg version.
 - Whether you run the system service or the user service.
 - The smallest change or input that shows the problem.
 
-You get an answer within 14 days. I publish a fix and a security advisory
-before any public write-up.
+You get an answer within 14 days. The owner publishes a fix and a security
+advisory before any public write-up.
 
 ## Trust model
 
