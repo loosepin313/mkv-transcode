@@ -12,7 +12,7 @@ import signal
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List, Optional
 
 from ..errors import TranscodeError
 from ..log import get_logger
@@ -53,14 +53,17 @@ def nice_tool() -> str:
 
 def run_ffmpeg(command: List[str], duration: float, timeout_seconds: float,
                nice: int = 10, progress_interval: float = PROGRESS_INTERVAL,
-               on_progress=None) -> RunResult:
+               on_progress=None, env: Optional[Dict[str, str]] = None) -> RunResult:
     """Run one ffmpeg pass and return a RunResult.
 
-    on_progress takes (seconds_done, percent).
+    on_progress takes (seconds_done, percent). env adds variables to the
+    child, for example CUDA_VISIBLE_DEVICES to pin a GPU.
     """
     argv = build_argv(["ffmpeg"] + command, nice)
     printable = " ".join(argv)
     log.debug("run: %s", printable)
+    child_env = dict(os.environ)
+    child_env.update(env or {})
     started = time.time()
     stderr_lines: List[str] = []
     try:
@@ -70,6 +73,7 @@ def run_ffmpeg(command: List[str], duration: float, timeout_seconds: float,
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            env=child_env,
             start_new_session=True,
         )
     except OSError as exc:

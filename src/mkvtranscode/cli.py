@@ -457,6 +457,7 @@ _SECTION_COMMENTS = {
     "metadata": "IMDb lookup settings.",
     "output": "What to do with the finished file and the source file.",
     "job": "Runtime limits and logging.",
+    "gpu": "GPU pinning for NVENC encodes. Each running job gets one index.",
 }
 
 
@@ -479,7 +480,7 @@ def default_config_toml() -> str:
         "",
     ]
     for section in ("paths", "watch", "video", "audio", "subtitles", "language",
-                    "naming", "metadata", "output", "job"):
+                    "naming", "metadata", "output", "job", "gpu"):
         target = getattr(config, section)
         lines.append("# " + _SECTION_COMMENTS[section])
         lines.append("[%s]" % section)
@@ -490,6 +491,10 @@ def default_config_toml() -> str:
             if section == "paths" and f.name in _EXAMPLE_PATHS:
                 lines.append('%s = %s    # write "" to derive it from transcoded'
                              % (f.name, _toml_value(_EXAMPLE_PATHS[f.name])))
+                continue
+            if section == "gpu" and f.name == "devices":
+                lines.append('%s = %s    # one index per job, for example [0, 1]'
+                             % (f.name, _toml_value(value)))
                 continue
             lines.append("%s = %s" % (f.name, _toml_value(value)))
         lines.append("")

@@ -31,6 +31,8 @@ PREFIX_END = "~"
 
 # 'progress pass 1: 2h 02m (93.9%)'
 PROGRESS_RE = re.compile(r"^progress pass (\d+): (.+?) \((\d+(?:\.\d+)?)%\)$")
+# 'gpu: 1' written when a job holds a GPU
+GPU_RE = re.compile(r"^gpu: (\d+)$")
 # Plan lines the pipeline writes before ffmpeg starts.
 PLAN_RE = re.compile(r"^(input|named|video|audio|subs|quality|command):")
 NOTE_RE = re.compile(r"^(warning|audio #\d+|.*downmixed from|.*->.*for the Opus)")
@@ -181,6 +183,7 @@ def _job(row: sqlite3.Row, config: Config, log_lines: int, now: float) -> Dict:
     lines = tail(path, log_lines) if status == RUNNING else tail(path, 40)
     plan = _plan(head(path, 60))
     progress = last_progress(lines) if status == RUNNING else None
+    gpu = _gpu_index(head(path, 80)) or _gpu_index(lines)
     entry = {
         "input": input_path,
         "name": name,
@@ -203,6 +206,7 @@ def _job(row: sqlite3.Row, config: Config, log_lines: int, now: float) -> Dict:
         "report_path": report_path(config, input_path),
         "progress": progress,
         "plan": plan,
+        "gpu": gpu,
         "notes": _notes(lines),
     }
     if progress and entry["elapsed"] and progress["percent"] > 0.5:
@@ -502,6 +506,37 @@ def _disk(config: Config) -> Dict:
             "min_free_bytes": int(config.job.min_free_gb * 1024 ** 3)}
 
 
+def gpu_stats(config: Config) -> List[Dict]:
+    """Read live GPU counters with nvidia-smi.
+
+    The list is empty when gpu.stats is off, nvidia-smi is missing, or the box
+    has no GPU. The result is cached for two seconds, so a page refresh does
+    not start a new nvidia-smi for every card.
+    """
+    if not config.gpu.stats:
+        return []
+    now = time.time()
+    if now - _GPU_CACHE["at"] < 2.0:
+        return _GPU_CACHE["rows"]
+    from ..transcode.gpu import gpu_rows
+    rows = gpu_rows()
+    _GPU_CACHE["at"] = now
+    _GPU_CACHE["rows"] = rows
+    return rows
+
+_GPU_CACHE: Dict[str, object] = {"at": 0.0, "rows": []}
+
+
+def _gpu_index(lines: List[str]) -> Optional[int]:
+    """Return the GPU a job holds, read from its log. None for a CPU job."""
+    found = None
+    for line in lines or []:
+        match = GPU_RE.match(line.strip())
+        if match:
+            found = int(match.group(1))
+    return found
+
+
 def _config_summary(config: Config) -> Dict:
     """Show the settings an operator checks first."""
     profile = config.active_profile()
@@ -514,6 +549,7 @@ def _config_summary(config: Config) -> Dict:
         "audio_codec": config.audio.codec,
         "audio_policy": config.audio.policy,
         "max_parallel": config.job.max_parallel,
+        "gpu_devices": list(config.gpu.devices),
         "max_attempts": config.job.max_attempts,
         "timeout_hours": config.job.timeout_hours,
         "source_action": config.output.source_action,
@@ -587,4 +623,6 @@ def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120,
         "upload": _upload_info(config, allow_upload, max_upload_bytes),
         "work": _workdir(config),
         "disk": _disk(config),
+        "gpus": gpu_stats(config),
+        "gpu_devices": list(config.gpu.devices),
     }

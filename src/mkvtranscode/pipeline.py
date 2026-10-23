@@ -83,7 +83,8 @@ class Pipeline:
 
     # ---- public API ----------------------------------------------------
 
-    def process(self, path: str, dry_run: bool = False, force: bool = False) -> Outcome:
+    def process(self, path: str, dry_run: bool = False, force: bool = False,
+                gpu: Optional[int] = None) -> Outcome:
         """Process one source file. Never raises for a normal failure."""
         started = time.time()
         outcome = Outcome(input=path, profile=self.config.video.profile)
@@ -95,7 +96,7 @@ class Pipeline:
         try:
             with FileLog(log_path, log) as journal:
                 journal.log("input: %s" % path)
-                self._run(path, dry_run, force, outcome, journal)
+                self._run(path, dry_run, force, outcome, journal, gpu)
                 outcome.status = outcome.status or DONE
                 journal.log("status: %s %s" % (outcome.status, outcome.message))
         except SkipFile as exc:
@@ -133,7 +134,8 @@ class Pipeline:
 
     # ---- internals -----------------------------------------------------
 
-    def _run(self, path: str, dry_run: bool, force: bool, outcome: Outcome, journal) -> None:
+    def _run(self, path: str, dry_run: bool, force: bool, outcome: Outcome, journal,
+             gpu: Optional[int] = None) -> None:
         config = self.config
         if os.path.islink(path):
             raise SkipFile("input is a symbolic link, not a file")
@@ -220,7 +222,9 @@ class Pipeline:
                 journal.log("warning: %s is %s, which uses RAM. A large film can fill it."
                             % (config.paths.work, mount_fstype(config.paths.work)))
 
-        self._execute(plan, info, journal)
+        if gpu is not None:
+            journal.log("gpu: %d" % gpu)
+        self._execute(plan, info, journal, gpu)
 
         problem = verify_output(work_path, stat.st_size, config.output.min_output_ratio, info.duration)
         if problem:
@@ -247,9 +251,10 @@ class Pipeline:
         self._handle_source(path, journal)
         outcome.message = "ok"
 
-    def _execute(self, plan, info: MediaInfo, journal) -> None:
+    def _execute(self, plan, info: MediaInfo, journal, gpu: Optional[int] = None) -> None:
         """Run every ffmpeg pass and stop on the first failure."""
         total = plan.passes
+        env = {"CUDA_VISIBLE_DEVICES": str(gpu)} if gpu is not None else None
         for index in range(total):
             if total > 1:
                 journal.log("pass %d of %d" % (index + 1, total))
@@ -262,6 +267,7 @@ class Pipeline:
                 on_progress=lambda done, percent: journal.log(
                     "progress pass %d: %s (%.1f%%)" % (index + 1, human_duration(done), percent)
                 ),
+                env=env,
             )
             if result.stderr_tail:
                 journal.write(result.stderr_tail)

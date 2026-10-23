@@ -125,3 +125,8 @@ timeout_hours = 12.0
 min_free_gb = 10.0
 log_level = "info"
 keep_work_dir_on_error = true
+
+# GPU pinning for NVENC encodes. Each running job gets one index. See docs/HARDWARE-ACCEL.md.
+[gpu]
+devices = []    # one index per job, for example [0, 1]
+stats = true    # the status page reads nvidia-smi

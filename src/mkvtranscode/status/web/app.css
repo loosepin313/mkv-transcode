@@ -82,6 +82,9 @@ h2{font-size:17px;margin:0}
 
 /* cards */
 .cards{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:14px;margin:24px 0}
+/* one card per GPU, shown only when the box has a GPU */
+.gpu-cards{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:-8px 0 18px}
+.gpu-cards .label{text-transform:none;letter-spacing:0;font-size:12px}
 .card{padding:18px 20px;border:1px solid var(--st-line);border-radius:13px;background:var(--st-surface)}
 .label{font-size:12px;color:var(--st-ink-muted);text-transform:uppercase;letter-spacing:.8px}
 .value{font-size:28px;font-weight:500;line-height:1.4;margin-top:3px}

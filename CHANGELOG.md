@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+Hardware encode with NVENC.
+
+- Set an encoder such as `hevc_nvenc` in the profile. The tool writes
+  `-rc vbr -cq <crf>` because NVENC has no `crf`.
+- `[gpu] devices = [0, 1]` gives one GPU to each running job. The tool sets
+  `CUDA_VISIBLE_DEVICES` for that ffmpeg process, so two cards encode at the
+  same time. The GPU count caps `job.max_parallel`.
+- The status page shows one card per GPU: utilisation, memory, NVENC sessions
+  and fps, temperature, and the job that holds the card.
+- `doctor` checks the driver, the GPU count, and whether the GPU can encode
+  AV1. A Turing card cannot, so `av1_nvenc` fails the check there.
+- See `docs/HARDWARE-ACCEL.md`.
+
 Status web page.
 
 - `mkv-transcode status-web` serves a live status page. It shows the watcher

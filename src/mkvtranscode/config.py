@@ -197,6 +197,19 @@ class JobConfig:
 
 
 @dataclass
+class GpuConfig:
+    """GPU settings for NVENC encodes.
+
+    Each running job gets one index from `devices`. The tool sets
+    CUDA_VISIBLE_DEVICES for that ffmpeg process, so two jobs on two cards
+    encode on two cards.
+    """
+
+    devices: List[int] = field(default_factory=list)   # e.g. [0, 1]
+    stats: bool = True                                 # the status page reads nvidia-smi
+
+
+@dataclass
 class Config:
     paths: PathConfig = field(default_factory=PathConfig)
     watch: WatchConfig = field(default_factory=WatchConfig)
@@ -208,6 +221,7 @@ class Config:
     metadata: MetadataConfig = field(default_factory=MetadataConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     job: JobConfig = field(default_factory=JobConfig)
+    gpu: GpuConfig = field(default_factory=GpuConfig)
     source_file: Optional[str] = None
 
     # ---- loading -------------------------------------------------------
@@ -262,6 +276,7 @@ class Config:
             "metadata": self.metadata,
             "output": self.output,
             "job": self.job,
+            "gpu": self.gpu,
         }
         for name, value in os.environ.items():
             if not name.startswith(ENV_PREFIX):
@@ -303,6 +318,7 @@ class Config:
         else:
             self.paths.processed = expand_in(self.paths.processed, base)
         self.watch.extensions = [ext.lstrip(".").lower() for ext in self.watch.extensions]
+        self.gpu.devices = [_as_index(index) for index in self.gpu.devices]
         return self
 
     def validate(self) -> "Config":
@@ -332,6 +348,11 @@ class Config:
             raise ConfigError("job.max_attempts must be 1 or more")
         if self.job.max_parallel < 1:
             raise ConfigError("job.max_parallel must be 1 or more")
+        if len(set(self.gpu.devices)) != len(self.gpu.devices):
+            raise ConfigError("gpu.devices must not repeat an index")
+        for index in self.gpu.devices:
+            if index < 0:
+                raise ConfigError("gpu.devices must hold indexes from 0 up")
         if "{title}" not in self.naming.pattern or "{year}" not in self.naming.pattern:
             raise ConfigError("naming.pattern must contain {title} and {year}")
         if not self.language.default:
@@ -413,6 +434,14 @@ def _bind(target: Any, data: Dict[str, Any], prefix: str) -> None:
         if isinstance(raw, dict):
             raise ConfigError("%s must not be a table" % path)
         setattr(target, f.name, _coerce(current, raw, path))
+
+
+def _as_index(value: Any) -> int:
+    """Turn a gpu.devices entry into an integer index."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ConfigError("gpu.devices must hold GPU indexes such as 0 or 1")
 
 
 def _sibling(base_dir: str, name: str, fallback: str) -> str:

@@ -20,6 +20,7 @@ from .metadata import build_provider
 from .pipeline import Outcome, Pipeline
 from .scan import Candidate, is_ready, list_candidates
 from .state import State
+from .transcode.gpu import GpuPool
 from .util import ensure_dir
 
 log = get_logger("watch")
@@ -40,6 +41,8 @@ class Watcher:
         self.failures = 0
         self.stop_requested = False
         self.last_rescan = 0.0
+        self.gpu_pool = GpuPool(config.gpu.devices) if config.gpu.devices else None
+        self._gpu_by_path: Dict[str, Optional[int]] = {}
 
     # ---- setup ---------------------------------------------------------
 
@@ -173,7 +176,9 @@ class Watcher:
 
     def _service_ready(self, dry_run: bool) -> None:
         for path in sorted(list(self.pending)):
-            if len(self.running) >= self.config.job.max_parallel:
+            if len(self.running) >= self._parallel_limit():
+                return
+            if self.gpu_pool and self.gpu_pool.free_count() == 0:
                 return
             candidate = self.pending.get(path)
             if candidate is None:
@@ -191,18 +196,46 @@ class Watcher:
             self.pending.pop(path, None)
             self._start(path, dry_run)
 
+    def _parallel_limit(self) -> int:
+        """Return how many jobs may run at once.
+
+        A job needs a GPU when gpu.devices is set, so the GPU count caps the
+        number of running jobs.
+        """
+        limit = self.config.job.max_parallel
+        if self.gpu_pool:
+            limit = min(limit, len(self.gpu_pool.devices))
+        return max(1, limit)
+
     def _start(self, path: str, dry_run: bool) -> None:
+        gpu = self.gpu_pool.acquire() if self.gpu_pool else None
         self.running.append(path)
-        log.info("start: %s", os.path.basename(path))
+        self._gpu_by_path[path] = gpu
+        if gpu is None:
+            log.info("start: %s", os.path.basename(path))
+        else:
+            log.info("start: %s on gpu %d", os.path.basename(path), gpu)
         if self.config.job.max_parallel <= 1:
-            self._finish(self.pipeline.process(path, dry_run=dry_run))
+            self._finish(self._run_job(path, dry_run, gpu))
             return
         executor = getattr(self, "_executor", None)
         if executor is None:
-            executor = ThreadPoolExecutor(max_workers=self.config.job.max_parallel)
+            executor = ThreadPoolExecutor(max_workers=self._parallel_limit())
             self._executor = executor
-        future = executor.submit(self.pipeline.process, path, dry_run)
+        future = executor.submit(self._run_job, path, dry_run, gpu)
         future.add_done_callback(self._on_future)
+
+    def _run_job(self, path: str, dry_run: bool, gpu: Optional[int]) -> Outcome:
+        """Run one job, then give its GPU back to the pool."""
+        try:
+            return self.pipeline.process(path, dry_run=dry_run, gpu=gpu)
+        finally:
+            self._release_gpu(path)
+
+    def _release_gpu(self, path: str) -> None:
+        if not self.gpu_pool:
+            return
+        self.gpu_pool.release(self._gpu_by_path.pop(path, None))
 
     def _on_future(self, future) -> None:
         try:

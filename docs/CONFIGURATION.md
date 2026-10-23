@@ -184,13 +184,26 @@ small file, so raise the value with care.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `max_parallel` | `1` | Jobs at the same time. Keep 1 unless you have many cores. |
+| `max_parallel` | `1` | Jobs at the same time. Keep 1 unless you have many cores or a GPU each. |
 | `max_attempts` | `3` | Stop retrying a file after this many failures. |
 | `nice` | `10` | Priority for ffmpeg. Higher is friendlier. |
 | `timeout_hours` | `12.0` | Kill an ffmpeg pass after this long. |
 | `min_free_gb` | `10.0` | Refuse to start below this free space. |
 | `log_level` | `info` | `debug`, `info`, `warning` or `error`. |
 | `keep_work_dir_on_error` | `true` | Keep the partial file after a failure. |
+
+## [gpu]
+
+GPU pinning for NVENC encodes. See [HARDWARE-ACCEL.md](HARDWARE-ACCEL.md) for the
+setup and for what each GPU can encode.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `devices` | `[]` | GPU indexes, one per job, for example `[0, 1]`. Empty means no pinning. |
+| `stats` | `true` | The status page reads `nvidia-smi` and shows one card per GPU. |
+
+The GPU count caps the running jobs. With `devices = [0, 1]` and
+`max_parallel = 4`, the watcher still runs two jobs at a time.
 
 ## Environment overrides
 

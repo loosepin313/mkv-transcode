@@ -66,6 +66,51 @@ function initTheme() {
 
 // ---- cards -------------------------------------------------------------
 
+function renderGpus() {
+  const s = state.snap;
+  const gpus = s.gpus || [];
+  const box = $("gpu-cards");
+  box.textContent = "";
+  box.hidden = gpus.length === 0;
+  if (!gpus.length) return;
+  const busy = {};
+  (s.running || []).forEach((job) => {
+    if (job.gpu !== null && job.gpu !== undefined) busy[job.gpu] = job.title || job.name;
+  });
+  gpus.forEach((gpu) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = "GPU " + gpu.index + " \u00b7 " + (gpu.name || "unknown");
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = gpu.util_percent === null ? "\u2014" : Math.round(gpu.util_percent) + "%";
+    const sub = document.createElement("div");
+    sub.className = "model";
+    const bits = [];
+    if (gpu.memory_used_mb !== null && gpu.memory_total_mb !== null) {
+      bits.push(Math.round(gpu.memory_used_mb) + "/" + Math.round(gpu.memory_total_mb) + " MiB");
+    }
+    if (gpu.encode_sessions) {
+      bits.push(gpu.encode_sessions + " encode " + Math.round(gpu.encode_fps || 0) + " fps");
+    }
+    if (gpu.temperature_c !== null) bits.push(Math.round(gpu.temperature_c) + " C");
+    if (busy[gpu.index]) bits.push(busy[gpu.index]);
+    sub.textContent = bits.join(" \u00b7 ");
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    const fill = document.createElement("i");
+    fill.style.width = (gpu.util_percent || 0) + "%";
+    bar.appendChild(fill);
+    card.appendChild(label);
+    card.appendChild(value);
+    card.appendChild(sub);
+    card.appendChild(bar);
+    box.appendChild(card);
+  });
+}
+
 function renderCards() {
   const s = state.snap;
   const card = $("service-card");
@@ -87,6 +132,7 @@ function renderCards() {
     const left = [job.title || job.name];
     if (percent !== null) left.push(pct(percent), "pass " + job.progress.pass);
     if (job.eta_seconds) left.push(dur(job.eta_seconds) + " left");
+    if (job.gpu !== null && job.gpu !== undefined) left.push("GPU " + job.gpu);
     setText("running-sub", left.join(" · "));
     $("running-bar").hidden = percent === null;
     $("running-fill").style.width = (percent || 0) + "%";
@@ -475,6 +521,7 @@ function current() {
 
 function render() {
   renderCards();
+  renderGpus();
   renderJobs();
   renderQueue();
   renderTransfer();

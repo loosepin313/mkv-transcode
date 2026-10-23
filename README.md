@@ -143,6 +143,10 @@ status page.
 The `hevc` and `h264` profiles exist for older players. See
 [docs/CODEC-CHOICE.md](docs/CODEC-CHOICE.md).
 
+An NVIDIA GPU can do the encode instead of the CPU. Set an encoder such as
+`hevc_nvenc`, then list one GPU index per job. See
+[docs/HARDWARE-ACCEL.md](docs/HARDWARE-ACCEL.md).
+
 ## Commands
 
 | Command | Purpose |
@@ -164,6 +168,7 @@ The `hevc` and `h264` profiles exist for older players. See
 - [docs/INSTALL.md](docs/INSTALL.md) — packages on Fedora and Rocky Linux.
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — every setting.
 - [docs/CODEC-CHOICE.md](docs/CODEC-CHOICE.md) — why AV1, and when to use HEVC.
+- [docs/HARDWARE-ACCEL.md](docs/HARDWARE-ACCEL.md) — encode on an NVIDIA GPU, one card per job.
 - [docs/METADATA.md](docs/METADATA.md) — IMDb lookups and file naming.
 - [docs/SYSTEMD.md](docs/SYSTEMD.md) — run the watcher as a service.
 - [docs/STATUS-WEB.md](docs/STATUS-WEB.md) — watch a run in a browser.

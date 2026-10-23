@@ -280,6 +280,9 @@ def _attach_profile(plan: Plan, config: Config, profile) -> None:
         plan.quality_args = []
     elif profile.quality_args:
         plan.quality_args = list(profile.quality_args)
+    elif profile.encoder.endswith("_nvenc"):
+        # NVENC has no crf. -cq with vbr rate control is the closest match.
+        plan.quality_args = ["-rc", "vbr", "-cq", str(profile.crf), "-b:v", "0"]
     else:
         plan.quality_args = ["-crf", str(profile.crf)]
     plan.preset_args = []

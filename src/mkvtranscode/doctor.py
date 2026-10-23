@@ -98,6 +98,7 @@ def run_checks(config: Config) -> List[Check]:
     checks.append(Check(OK if provider.available() or config.metadata.provider in ("filename", "none") else WARN,
                         "metadata", status))
 
+    checks.extend(_gpu_checks(config))
     checks.append(_systemd_check())
     return checks
 
@@ -161,6 +162,45 @@ def _work_dir_check(config: Config) -> Check:
     if fstype in ("tmpfs", "ramfs"):
         return Check(WARN, "workdir", detail + ". %s uses RAM, a large film can fill it." % fstype)
     return Check(WARN, "workdir", detail)
+
+
+def _gpu_checks(config: Config) -> List[Check]:
+    """Report the GPUs, and check the NVENC settings against them."""
+    from .transcode.gpu import NVENC_ENCODERS, av1_capable, gpu_rows
+
+    profile = config.active_profile()
+    wants_nvenc = profile.encoder in NVENC_ENCODERS
+    rows = gpu_rows()
+    checks: List[Check] = []
+    if not rows:
+        if wants_nvenc:
+            checks.append(Check(FAIL, "gpu",
+                                "no GPU found. Install the NVIDIA driver, or pick a CPU encoder."))
+        return checks
+    names = ", ".join("GPU %d %s" % (row["index"], row["name"]) for row in rows)
+    checks.append(Check(OK, "gpu", "%d GPU: %s" % (len(rows), names)))
+    if not wants_nvenc:
+        checks.append(Check(OK, "nvenc",
+                            "video.profile %s runs on the CPU. Set the encoder to *_nvenc to use the GPU."
+                            % config.video.profile))
+        return checks
+    if profile.encoder == "av1_nvenc" and av1_capable(rows) is False:
+        checks.append(Check(FAIL, "nvenc av1",
+                            "these GPUs cannot encode AV1. NVENC needs compute capability 8.9 or more. Use hevc_nvenc."))
+    present = {row["index"] for row in rows}
+    if not config.gpu.devices:
+        checks.append(Check(WARN, "gpu.devices",
+                            "empty, so every job uses GPU 0. List one index per job, for example [0, 1]."))
+        return checks
+    missing = [index for index in config.gpu.devices if index not in present]
+    if missing:
+        checks.append(Check(FAIL, "gpu.devices",
+                            "no such GPU: %s" % ", ".join(str(index) for index in missing)))
+    if config.job.max_parallel > len(config.gpu.devices):
+        checks.append(Check(WARN, "job.max_parallel",
+                            "%d jobs but %d GPU, so the watcher runs %d at a time"
+                            % (config.job.max_parallel, len(rows), len(config.gpu.devices))))
+    return checks
 
 
 def _systemd_check() -> Check:
