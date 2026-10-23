@@ -438,8 +438,8 @@ def test_imdb_search_prefers_an_exact_title(tmp_path):
     assert data["results"][0]["imdb_id"] == "tt0083658"
 
 
-def test_download_list_fills_its_panel(tmp_path):
-    """The download list has no height cap, unlike the queue box."""
+def test_download_list_shows_six_files_at_a_time(tmp_path):
+    """The download list caps at six rows and scrolls for the rest."""
     config = make_config(tmp_path)
     httpd, worker = with_server(config)
     port = httpd.server_address[1]
@@ -450,6 +450,7 @@ def test_download_list_fills_its_panel(tmp_path):
         httpd.shutdown()
         httpd.server_close()
         worker.join(timeout=5)
-    assert '<div class="half-body" id="downloads">' in page
+    assert '<div class="half-body capped" id="downloads">' in page
     assert ".half-body.scroll" not in css
-    assert ".half-body{padding:16px 20px;flex:1}" in css
+    # Six rows of 59.5 px each, so the seventh row stays out of view.
+    assert ".half-body.capped{max-height:358px;overflow:auto}" in css
