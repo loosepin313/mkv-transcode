@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 import time
 from dataclasses import dataclass
 from typing import List, Optional
@@ -68,24 +69,30 @@ class State:
     def __init__(self, path: str):
         self.path = path
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        self.conn = sqlite3.connect(path, timeout=30)
+        # The watcher runs jobs on several threads. One connection serves them
+        # all, guarded by a lock, so a job never touches a foreign connection.
+        self.conn = sqlite3.connect(path, timeout=30, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 
     def close(self) -> None:
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
 
     # ---- jobs ----------------------------------------------------------
 
     def get_job(self, input_path: str) -> Optional[JobRecord]:
-        row = self.conn.execute("SELECT * FROM jobs WHERE input = ?", (input_path,)).fetchone()
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM jobs WHERE input = ?", (input_path,)).fetchone()
         return _record(row) if row else None
 
     def start_job(self, record: JobRecord) -> None:
         record.status = RUNNING
         record.started = time.time()
-        self.conn.execute(
+        with self._lock:
+            self.conn.execute(
             """INSERT INTO jobs (input, status, started, source_size, title, year, imdb_id, profile)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(input) DO UPDATE SET status=excluded.status,
@@ -94,32 +101,35 @@ class State:
                    profile=excluded.profile""",
             (record.input, record.status, record.started, record.source_size,
              record.title, record.year, record.imdb_id, record.profile),
-        )
-        self.conn.commit()
+            )
+            self.conn.commit()
 
     def finish_job(self, record: JobRecord) -> None:
         record.finished = time.time()
         if not record.seconds and record.started:
             record.seconds = record.finished - record.started
-        self.conn.execute(
-            """UPDATE jobs SET output=?, status=?, finished=?, seconds=?, output_size=?,
+        with self._lock:
+            self.conn.execute(
+                """UPDATE jobs SET output=?, status=?, finished=?, seconds=?, output_size=?,
                       title=?, year=?, imdb_id=?, profile=?, message=? WHERE input=?""",
-            (record.output, record.status, record.finished, record.seconds, record.output_size,
-             record.title, record.year, record.imdb_id, record.profile, record.message, record.input),
-        )
-        self.conn.commit()
+                (record.output, record.status, record.finished, record.seconds, record.output_size,
+                 record.title, record.year, record.imdb_id, record.profile, record.message, record.input),
+            )
+            self.conn.commit()
 
     def recent_jobs(self, limit: int = 20, status: Optional[str] = None) -> List[JobRecord]:
-        if status:
-            rows = self.conn.execute(
-                "SELECT * FROM jobs WHERE status = ? ORDER BY id DESC LIMIT ?", (status, limit)
-            ).fetchall()
-        else:
-            rows = self.conn.execute("SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        with self._lock:
+            if status:
+                rows = self.conn.execute(
+                    "SELECT * FROM jobs WHERE status = ? ORDER BY id DESC LIMIT ?", (status, limit)
+                ).fetchall()
+            else:
+                rows = self.conn.execute("SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [_record(row) for row in rows]
 
     def counts(self) -> dict:
-        rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
+        with self._lock:
+            rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
         return {row["status"]: row["n"] for row in rows}
 
     def is_finished(self, input_path: str, size: int = 0) -> bool:
@@ -129,38 +139,41 @@ class State:
         back to the file name and the size. That stops a finished film from
         encoding twice.
         """
-        row = self.conn.execute(
-            "SELECT status FROM jobs WHERE input = ?", (input_path,)
-        ).fetchone()
-        if row and row["status"] in (DONE, SKIPPED):
-            return True
-        if not size:
-            return False
-        name = os.path.basename(input_path).replace("\\", "\\\\")
-        name = name.replace("%", "\\%").replace("_", "\\_")
-        row = self.conn.execute(
-            "SELECT status FROM jobs WHERE status IN (?, ?) AND source_size = ? "
-            "AND input LIKE ? ESCAPE '\\'",
-            (DONE, SKIPPED, size, "%" + name),
-        ).fetchone()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT status FROM jobs WHERE input = ?", (input_path,)
+            ).fetchone()
+            if row and row["status"] in (DONE, SKIPPED):
+                return True
+            if not size:
+                return False
+            name = os.path.basename(input_path).replace("\\", "\\\\")
+            name = name.replace("%", "\\%").replace("_", "\\_")
+            row = self.conn.execute(
+                "SELECT status FROM jobs WHERE status IN (?, ?) AND source_size = ? "
+                "AND input LIKE ? ESCAPE '\\'",
+                (DONE, SKIPPED, size, "%" + name),
+            ).fetchone()
         return bool(row)
 
     # ---- seen files ----------------------------------------------------
 
     def note_seen(self, path: str, size: int, mtime: float) -> None:
         now = time.time()
-        self.conn.execute(
-            """INSERT INTO seen (path, size, mtime, first_seen, last_seen)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime=excluded.mtime,
-                   last_seen=excluded.last_seen""",
-            (path, size, mtime, now, now),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO seen (path, size, mtime, first_seen, last_seen)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(path) DO UPDATE SET size=excluded.size, mtime=excluded.mtime,
+                       last_seen=excluded.last_seen""",
+                (path, size, mtime, now, now),
+            )
+            self.conn.commit()
 
     def forget_seen(self, path: str) -> None:
-        self.conn.execute("DELETE FROM seen WHERE path = ?", (path,))
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute("DELETE FROM seen WHERE path = ?", (path,))
+            self.conn.commit()
 
 
 def _record(row) -> JobRecord:

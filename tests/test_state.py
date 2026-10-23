@@ -47,3 +47,32 @@ def test_a_name_with_a_wildcard_still_matches(tmp_path):
     assert state.is_finished("/new/incoming/A%B_c.mkv", 100) is True
     assert state.is_finished("/new/incoming/AXBYC.mkv", 100) is False
     state.close()
+
+
+def test_several_threads_share_one_state_store(tmp_path):
+    """The watcher runs jobs on threads, so State must be thread safe."""
+    import threading
+
+    state = State(os.path.join(str(tmp_path), ".state.sqlite"))
+    errors = []
+
+    def work(worker):
+        try:
+            for index in range(40):
+                path = "/in/%d-%d.mkv" % (worker, index)
+                record = JobRecord(input=path, source_size=10)
+                state.start_job(record)
+                state.note_seen(path, 10, 0.0)
+                record.status = DONE
+                state.finish_job(record)
+                state.counts()
+        except Exception as exc:                      # keep the failure for the assert
+            errors.append(exc)
+
+    threads = [threading.Thread(target=work, args=(n,)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert state.counts().get("done") == 160
