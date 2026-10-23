@@ -19,6 +19,7 @@ from urllib.request import pathname2url
 
 from .. import __version__
 from ..config import Config
+from ..scan import PARTIAL_SUFFIXES
 from ..state import DONE, FAILED, RUNNING, SKIPPED
 from ..util import free_bytes, which
 
@@ -238,10 +239,35 @@ def job_detail(config: Config, name: str) -> Dict:
     }
 
 
+def _queue_reason(name: str, size: int, min_bytes: int, config: Config) -> str:
+    """Return why the scanner skips this file, or '' when it is eligible.
+
+    This mirrors scan.acceptable and the size floor, so the page gives the
+    same answer the watcher gives.
+    """
+    lowered = name.lower()
+    ext = os.path.splitext(lowered)[1].lstrip(".")
+    if config.watch.extensions and ext not in config.watch.extensions:
+        return "wrong extension"
+    for suffix in PARTIAL_SUFFIXES:
+        if lowered.endswith(suffix):
+            return "partial file"
+    for prefix in config.watch.ignore_prefixes:
+        if prefix and lowered.startswith(prefix.lower()):
+            return "ignored name"
+    if size < min_bytes:
+        return "below min_size_mb"
+    return ""
+
+
 def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
-    """List the files in incoming with their size and stability."""
+    """List every regular file in incoming, with the reason the scanner skips it.
+
+    Files with the wrong extension stay in the list. The page shows why the
+    watcher ignores them, which is what an operator wants to see.
+    """
     items = []
-    extensions = tuple("." + ext for ext in config.watch.extensions)
+    min_bytes = int(config.watch.min_size_mb * 1024 * 1024)
     try:
         names = sorted(os.listdir(config.paths.incoming))
     except OSError:
@@ -250,8 +276,6 @@ def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
     for name in names:
         path = os.path.join(config.paths.incoming, name)
         if not os.path.isfile(path):
-            continue
-        if extensions and not name.lower().endswith(extensions):
             continue
         try:
             info = os.stat(path)
@@ -264,6 +288,8 @@ def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
             "size": info.st_size,
             "mtime": info.st_mtime,
             "hidden": name.startswith(".") or name.startswith("_"),
+            "reason": _queue_reason(name, info.st_size, min_bytes, config),
+            "min_size_bytes": min_bytes,
             "seen": bool(row),
             "first_seen": row["first_seen"] if row else 0.0,
             "last_seen": row["last_seen"] if row else 0.0,
@@ -271,6 +297,74 @@ def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
         })
     items.sort(key=lambda item: item["mtime"])
     return items
+
+
+def safe_under(root: str, rel: str) -> Optional[str]:
+    """Resolve 'rel' inside 'root'. Return None when it escapes the folder.
+
+    A download name may contain folders, because the library uses one folder
+    per title. It may never contain '..' or start with a slash.
+    """
+    if not rel or rel.startswith(("/", "\\")):
+        return None
+    parts = rel.replace("\\", "/").split("/")
+    if any(part in ("", "..") for part in parts):
+        return None
+    base = os.path.realpath(root)
+    full = os.path.realpath(os.path.join(base, *parts))
+    if full != base and not full.startswith(base + os.sep):
+        return None
+    return full if os.path.isfile(full) else None
+
+
+def _downloads(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
+    """List finished files the page can offer for download."""
+    items: List[Dict] = []
+    sql = ("SELECT output, title, year FROM jobs WHERE status = ? AND output IS NOT NULL "
+           "ORDER BY id DESC")
+    for row in rows(conn, sql, (DONE,)):
+        output = row["output"] or ""
+        if not os.path.isfile(output):
+            continue
+        rel = rel_under(config.paths.transcoded, output)
+        if rel is None:
+            continue
+        label = row["title"] or os.path.splitext(os.path.basename(output))[0]
+        if row["year"]:
+            label = "%s (%s)" % (label, row["year"])
+        items.append({
+            "kind": "output", "label": label, "path": rel,
+            "size": os.path.getsize(output), "suffix": "MKV",
+        })
+        nfo = os.path.splitext(output)[0] + ".nfo"
+        if os.path.isfile(nfo):
+            nfo_rel = rel_under(config.paths.transcoded, nfo)
+            if nfo_rel:
+                items.append({
+                    "kind": "nfo", "label": label, "path": nfo_rel,
+                    "size": os.path.getsize(nfo), "suffix": "NFO",
+                })
+    return items
+
+
+def rel_under(root: str, path: str) -> Optional[str]:
+    """Return 'path' relative to 'root', or None when it sits outside."""
+    base = os.path.realpath(root)
+    full = os.path.realpath(path)
+    if not full.startswith(base + os.sep):
+        return None
+    return os.path.relpath(full, base)
+
+
+def _upload_info(config: Config, allow_upload: bool, max_bytes: int) -> Dict:
+    """Describe the upload form so the page can show the right controls."""
+    return {
+        "enabled": bool(allow_upload),
+        "incoming": config.paths.incoming,
+        "max_bytes": int(max_bytes),
+        "extensions": list(config.watch.extensions),
+        "free": free_bytes(config.paths.incoming),
+    }
 
 
 def _workdir(config: Config) -> List[Dict]:
@@ -350,7 +444,8 @@ def _config_summary(config: Config) -> Dict:
     }
 
 
-def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120) -> Dict:
+def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120,
+             allow_upload: bool = False, max_upload_bytes: int = 0) -> Dict:
     """Build one JSON friendly snapshot of the whole pipeline."""
     now = time.time()
     path = state_path(config)
@@ -377,6 +472,7 @@ def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120) -> Di
                        (SKIPPED,))
         totals = _totals(conn)
         queue = _queue(config, conn)
+        downloads = _downloads(config, conn)
     finally:
         if conn is not None:
             conn.close()
@@ -404,6 +500,8 @@ def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120) -> Di
             for row in skipped
         ],
         "queue": queue,
+        "downloads": downloads,
+        "upload": _upload_info(config, allow_upload, max_upload_bytes),
         "work": _workdir(config),
         "disk": _disk(config),
     }

@@ -13,11 +13,73 @@ nothing.
 | Jobs done card | Counts for done, failed, skipped and running jobs. |
 | Space saved card | Total source size, total output size, and the percent saved. |
 | Free space card | Free space in the library folder, and the `min_free_gb` stop level. |
+| Upload | Send a file into `incoming` from the browser. Off by default. See Uploads and downloads. |
+| Downloads | Every finished output and its `.nfo`, with a download link. |
 | Job list | Every job in the state file. Search by title, file name or IMDb id. Filter by status. |
 | Job detail | Source size, output size, space saved, encode time, started, elapsed, time left, and the profile. Tabs show the ffmpeg plan, the last 400 log lines, and the JSON report. |
-| Incoming queue | Files in `incoming`, with size, age, and whether the size is still changing. |
+| Incoming queue | Files in `incoming`, with size, age, and the reason the watcher skips them. The box shows about four rows and scrolls when more files wait. |
 
 The page refreshes every five seconds. Change that with `--interval`.
+
+## Uploads and downloads
+
+Downloads are always on. The page links to each finished output and its `.nfo`
+under `paths.transcoded`. The download route only opens files inside that
+folder, and only with the extensions it expects.
+
+Uploads are off by default, because they write to `incoming`. Turn them on with
+`--allow-upload`:
+
+```bash
+mkv-transcode status-web --allow-upload --max-upload-gb 60
+```
+
+For the service, add a drop-in:
+
+```bash
+sudo systemctl edit mkv-transcode-status.service
+```
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5 --allow-upload
+```
+
+Then run `sudo systemctl daemon-reload && sudo systemctl restart mkv-transcode-status.service`.
+
+How an upload behaves:
+
+- The name must be a bare file name, and the extension must be in
+  `watch.extensions`.
+- The server writes to a hidden `.part` file first, then renames it. The
+  watcher ignores the hidden name, so a half-finished upload never starts a
+  job.
+- `--max-upload-gb` caps the size. The default is 60 GiB. `0` means no cap.
+- An existing name returns 409. The server never overwrites a file.
+- The page also accepts this curl form:
+
+```bash
+curl -T "Film (2020).mkv" "http://<host>:8090/api/upload?name=Film%20(2020).mkv"
+```
+
+## Why a queued file never starts
+
+The queue table shows the reason. The watcher skips a file when:
+
+| Reason shown | Rule |
+|--------------|------|
+| `below min_size_mb (50 MiB floor)` | The file is smaller than `watch.min_size_mb`. The default is 50 MB, so short clips and test files are ignored. |
+| `ignored name` | The name starts with one of `watch.ignore_prefixes`: `.`, `_`, or `sample`. |
+| `wrong extension` | The extension is not in `watch.extensions`. |
+| `partial file` | The name ends with a partial suffix such as `.part` or `.tmp`. |
+
+To let a small test file through, lower the floor in the config:
+
+```toml
+[watch]
+min_size_mb = 1.0
+```
 
 ## Run it by hand
 
@@ -61,8 +123,10 @@ ExecStart=/usr/local/bin/mkv-transcode status-web --host 127.0.0.1 --port 9000
 ## Safety
 
 The page has no login and no tokens. The shipped unit binds to `0.0.0.0`, so
-any host on your local network can read the job list and the job logs. Keep
-the port off the public internet, or bind to `127.0.0.1` and use a tunnel:
+any host on your local network can read the job list and the job logs. With
+`--allow-upload`, any host on your local network can also write files into
+`incoming`. Keep the port off the public internet, or bind to `127.0.0.1` and
+use a tunnel:
 
 ```bash
 ssh -L 8090:127.0.0.1:8090 <host>
@@ -85,7 +149,7 @@ reach outside the logs folder.
 | `<transcoded>/.state.sqlite` | Job rows, counts, and the `seen` table. Opened read only. |
 | `<logs>/<name>.log` | Plan lines, progress percent, and notes for one job. |
 | `<logs>/<name>.json` | The report for one job. |
-| `incoming/` | The queue list. |
+| `incoming/` | The queue list, and the target folder for uploads. |
 | `workdir/` | Partial output size. |
 | `systemctl is-active mkv-transcode.service` | The watcher card. |
 

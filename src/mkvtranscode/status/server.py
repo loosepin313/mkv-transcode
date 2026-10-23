@@ -12,12 +12,24 @@ import os
 import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Dict
 from urllib.parse import unquote
 
 from ..log import get_logger
-from .collector import job_detail, snapshot
+from ..util import free_bytes
+from .collector import job_detail, safe_under, snapshot
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+
+# kind -> (config folder, allowed extensions) for the download route.
+KINDS = {
+    "output": ("transcoded", (".mkv", ".mp4", ".m4v")),
+    "nfo": ("transcoded", (".nfo",)),
+    "log": ("logs", (".log",)),
+    "report": ("logs", (".json",)),
+}
+
+UPLOAD_CHUNK = 1 << 20
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -43,6 +55,8 @@ class Handler(BaseHTTPRequestHandler):
     config = None            # set by serve()
     interval = 5.0
     recent = 80
+    allow_upload = False
+    max_upload_bytes = 0
 
     # ---- helpers -------------------------------------------------------
 
@@ -59,6 +73,48 @@ class Handler(BaseHTTPRequestHandler):
 
     def _fail(self, code: int, message: str) -> None:
         self._send(code, message.encode("utf-8"), "text/plain; charset=utf-8")
+
+    def _headers(self, code: int, content_type: str, length: int) -> None:
+        """Send the status line and the shared security headers."""
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(length))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", CSP)
+        self.end_headers()
+
+    def _query(self) -> Dict:
+        """Parse the query string into a dict."""
+        raw = self.path.split("?", 1)[1] if "?" in self.path else ""
+        out = {}
+        for part in raw.split("&"):
+            if "=" in part:
+                key, value = part.split("=", 1)
+                out[key] = unquote(value)
+        return out
+
+    def _send_file(self, full: str) -> None:
+        """Stream one file as an attachment."""
+        name = os.path.basename(full).replace('"', "").replace("\n", "").replace("\r", "")
+        try:
+            size = os.path.getsize(full)
+        except OSError:
+            self._fail(500, "cannot read the file")
+            return
+        self._headers(200, "application/octet-stream", size)
+        self.send_header("Content-Disposition", 'attachment; filename="%s"' % name)
+        if self.command == "HEAD":
+            return
+        try:
+            with open(full, "rb") as handle:
+                while True:
+                    chunk = handle.read(UPLOAD_CHUNK)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (OSError, BrokenPipeError):
+            log.debug("download stopped: %s", full)
 
     def asset(self, name: str):
         """Return the bytes of an asset inside the package web folder."""
@@ -88,7 +144,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/snapshot":
             try:
-                data = snapshot(self.config, recent_limit=self.recent)
+                data = snapshot(self.config, recent_limit=self.recent,
+                                allow_upload=self.allow_upload,
+                                max_upload_bytes=self.max_upload_bytes)
                 data["interval"] = self.interval
             except Exception as exc:                     # keep the page alive
                 log.warning("snapshot failed: %s", exc)
@@ -113,6 +171,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._send(200, b"ok\n", CONTENT_TYPES[".txt"])
             return
+        if path.startswith("/api/file"):
+            params = self._query()
+            self.send_download(params.get("kind", ""), params.get("path", ""))
+            return
         body, code = self.asset(path)
         if body is None:
             self._fail(code, "not found")
@@ -123,25 +185,129 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         self.do_GET()
 
+    def do_PUT(self) -> None:
+        """curl -T sends PUT, so accept the same body here."""
+        self.do_POST()
+
+    # ---- upload --------------------------------------------------------
+
+    def check_upload_name(self, name: str):
+        """Return (ok, message) for one upload name."""
+        if not name or name in (".", "..") or name != os.path.basename(name):
+            return False, "the name must be a bare file name"
+        if len(name) > 200:
+            return False, "the name is too long"
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
+            return False, "the name has control characters"
+        allowed = ["." + ext for ext in self.config.watch.extensions]
+        ext = os.path.splitext(name)[1].lower()
+        if allowed and ext not in allowed:
+            return False, "only these extensions are accepted: " + ", ".join(allowed)
+        return True, ""
+
+    def do_POST(self) -> None:
+        """Accept one raw file body into the incoming folder."""
+        path = self.path.split("?", 1)[0]
+        if path != "/api/upload":
+            self._fail(404, "not found")
+            return
+        if not self.allow_upload:
+            self._fail(403, "uploads are off. Start the server with --allow-upload.")
+            return
+        name = (self._query().get("name") or "").strip()
+        ok, message = self.check_upload_name(name)
+        if not ok:
+            self._fail(400, message)
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            length = 0
+        if length <= 0:
+            self._fail(411, "send a Content-Length header")
+            return
+        if self.max_upload_bytes and length > self.max_upload_bytes:
+            self._fail(413, "the file is larger than %d bytes" % self.max_upload_bytes)
+            return
+        incoming = self.config.paths.incoming
+        target = os.path.join(incoming, name)
+        if os.path.exists(target):
+            self._fail(409, "that file is already in incoming")
+            return
+        if free_bytes(incoming) < length:
+            self._fail(507, "not enough free space in incoming")
+            return
+        # A leading dot keeps the watcher away until the upload is complete.
+        tmp = os.path.join(incoming, "." + name + ".part")
+        written = 0
+        try:
+            with open(tmp, "wb") as handle:
+                remaining = length
+                while remaining > 0:
+                    chunk = self.rfile.read(min(UPLOAD_CHUNK, remaining))
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    written += len(chunk)
+                    remaining -= len(chunk)
+            if written != length:
+                os.unlink(tmp)
+                self._fail(400, "the upload stopped after %d bytes" % written)
+                return
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, target)
+        except OSError as exc:
+            if os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+            log.warning("upload failed: %s", exc)
+            self._fail(500, "the server could not write the file")
+            return
+        log.info("upload finished: %s (%d bytes)", name, written)
+        body = json.dumps({"ok": True, "name": name, "size": written}).encode("utf-8")
+        self._send(200, body, CONTENT_TYPES[".json"])
+
+    def send_download(self, kind: str, rel: str) -> None:
+        """Serve one file from the library or the logs folder."""
+        if kind not in KINDS:
+            self._fail(400, "kind must be one of: " + ", ".join(sorted(KINDS)))
+            return
+        folder_name, extensions = KINDS[kind]
+        root = getattr(self.config.paths, folder_name, "")
+        full = safe_under(root, rel) if root else None
+        if full is None:
+            self._fail(404, "no such file")
+            return
+        if os.path.splitext(full)[1].lower() not in extensions:
+            self._fail(400, "that file type is not offered for download")
+            return
+        self._send_file(full)
+
     def log_message(self, fmt, *args) -> None:
         """Send access lines to the app logger instead of stderr."""
         log.debug("%s - %s", self.address_string(), fmt % args)
 
 
-def make_server(config, host: str, port: int, interval: float = 5.0, recent: int = 80):
+def make_server(config, host: str, port: int, interval: float = 5.0, recent: int = 80,
+                allow_upload: bool = False, max_upload_bytes: int = 0):
     """Build the HTTP server without starting it."""
-    handler = type("BoundHandler", (Handler,),
-                   {"config": config, "interval": interval, "recent": recent})
+    handler = type("BoundHandler", (Handler,), {
+        "config": config, "interval": interval, "recent": recent,
+        "allow_upload": allow_upload, "max_upload_bytes": max_upload_bytes,
+    })
     httpd = ThreadingHTTPServer((host, port), handler)
     httpd.daemon_threads = True
     return httpd
 
 
 def serve(config, host: str = "127.0.0.1", port: int = 8090, interval: float = 5.0,
-          recent: int = 80) -> int:
+          recent: int = 80, allow_upload: bool = False, max_upload_bytes: int = 0) -> int:
     """Run the status server until SIGTERM or SIGINT arrives."""
     try:
-        httpd = make_server(config, host, port, interval, recent)
+        httpd = make_server(config, host, port, interval, recent, allow_upload,
+                            max_upload_bytes)
     except OSError as exc:
         print("cannot listen on %s:%d: %s" % (host, port, exc))
         return 1
@@ -157,6 +323,11 @@ def serve(config, host: str = "127.0.0.1", port: int = 8090, interval: float = 5
     shown = "127.0.0.1" if host in ("", "0.0.0.0", "::") else host
     print("mkv-transcode status page on http://%s:%d (refresh every %ds)"
           % (shown, port, int(interval)))
+    if allow_upload:
+        limit = "%.0f GiB" % (max_upload_bytes / 1024 ** 3) if max_upload_bytes else "no limit"
+        print("uploads are on: %s into %s (max %s)"
+              % (", ".join("." + e for e in config.watch.extensions),
+                 config.paths.incoming, limit))
     try:
         httpd.serve_forever(poll_interval=0.4)
     finally:

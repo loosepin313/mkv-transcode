@@ -10,6 +10,11 @@ Status web page.
   state file read only and writes nothing.
 - `mkv-transcode-status.service` runs the page. `BindsTo` ties it to the
   watcher, so a stopped watcher stops the page too.
+- The page now has an upload form and a download list. Uploads write into
+  `incoming` and stay off until you pass `--allow-upload`. A download link
+  exists for every finished output and its `.nfo`.
+- The queue table now shows why the watcher skips a queued file, such as
+  `below min_size_mb` or `ignored name`.
 
 Security and hardening.
 

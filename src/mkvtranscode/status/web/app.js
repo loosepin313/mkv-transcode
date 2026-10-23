@@ -281,8 +281,11 @@ function renderQueue() {
   const body = $("queue");
   const queue = s.queue || [];
   body.textContent = "";
+  const floor = queue.length ? bytes(queue[0].min_size_bytes) : "";
+  const ignored = queue.filter((item) => item.reason).length;
   setText("queue-note", queue.length
     ? queue.length + " file(s) in " + (s.config ? s.config.paths.incoming : "")
+      + " · floor " + floor + (ignored ? " · " + ignored + " ignored" : "")
     : "empty");
   if (!queue.length) {
     const row = document.createElement("tr");
@@ -307,15 +310,110 @@ function renderQueue() {
     age.textContent = ago(item.mtime);
     const status = document.createElement("td");
     status.className = "small";
-    status.textContent = item.hidden
-      ? "ignored (hidden)"
-      : (!item.seen ? "new file" : (item.stable ? "stable" : "size still changing"));
+    status.textContent = item.reason
+      ? item.reason + " (" + bytes(item.min_size_bytes) + " floor)"
+      : (item.seen ? (item.stable ? "stable" : "size still changing") : "new file");
     row.appendChild(file);
     row.appendChild(size);
     row.appendChild(age);
     row.appendChild(status);
     body.appendChild(row);
   });
+}
+
+// ---- upload and download ----------------------------------------------
+
+let xhr = null;
+
+function renderTransfer() {
+  const s = state.snap;
+  const up = s.upload || {};
+  $("upload-off").hidden = !!up.enabled;
+  $("upload-form").hidden = !up.enabled;
+  if (up.enabled) {
+    setText("upload-state", "max " + bytes(up.max_bytes) + " · " + bytes(up.free) + " free");
+    $("file").accept = (up.extensions || []).map((e) => "." + e).join(",");
+  } else {
+    setText("upload-state", "off");
+  }
+  renderDownloads(s.downloads || []);
+}
+
+function renderDownloads(items) {
+  const box = $("downloads");
+  box.textContent = "";
+  setText("download-note", items.length ? items.length + " finished file(s)" : "nothing finished yet");
+  if (!items.length) {
+    const none = document.createElement("div");
+    none.className = "small";
+    none.textContent = "No finished files in the library.";
+    box.appendChild(none);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "dl";
+    const what = document.createElement("div");
+    what.className = "what";
+    const label = document.createElement("b");
+    label.textContent = item.label;
+    const path = document.createElement("span");
+    path.textContent = bytes(item.size) + " · " + item.path;
+    what.appendChild(label);
+    what.appendChild(path);
+    const link = document.createElement("a");
+    link.textContent = item.suffix;
+    link.href = "/api/file?kind=" + encodeURIComponent(item.kind) + "&path=" + encodeURIComponent(item.path);
+    link.setAttribute("download", "");
+    row.appendChild(what);
+    row.appendChild(link);
+    box.appendChild(row);
+  });
+}
+
+function note(text) { setText("upload-note", text); }
+
+function startUpload() {
+  const input = $("file");
+  const file = input.files && input.files[0];
+  if (!file || xhr) return;
+  xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/upload?name=" + encodeURIComponent(file.name));
+  const total = file.size;
+  xhr.upload.onprogress = (ev) => {
+    const percent = ev.lengthComputable ? (ev.loaded / total) * 100 : 0;
+    $("upload-fill").style.width = percent + "%";
+    note(bytes(ev.loaded) + " of " + bytes(total) + " (" + percent.toFixed(1) + "%)");
+  };
+  xhr.onload = () => {
+    let text = "";
+    try {
+      const data = JSON.parse(xhr.responseText);
+      text = "Sent " + bytes(data.size) + ". The watcher starts when the size stops changing.";
+    } catch (e) {
+      text = xhr.responseText || ("HTTP " + xhr.status);
+    }
+    $("upload-fill").style.width = xhr.status === 200 ? "100%" : "0%";
+    note(text);
+    if (xhr.status === 200) {
+      input.value = "";
+      $("send").disabled = true;
+    }
+    xhr = null;
+    $("cancel").disabled = true;
+    load();
+  };
+  xhr.onerror = () => {
+    note("The upload stopped. Check the free space, then try again.");
+    xhr = null;
+    $("cancel").disabled = true;
+    $("send").disabled = false;
+  };
+  $("send").disabled = true;
+  $("cancel").disabled = false;
+  $("upload-fill").style.width = "0%";
+  note("Sending " + file.name + " ...");
+  xhr.send(file);
 }
 
 // ---- polling -----------------------------------------------------------
@@ -329,6 +427,7 @@ function render() {
   renderCards();
   renderJobs();
   renderQueue();
+  renderTransfer();
   const job = current();
   if (job) renderDetail(job);
   setText("updated", "Updated " + new Date().toLocaleTimeString()
@@ -375,6 +474,22 @@ initTheme();
 $("refresh").addEventListener("click", load);
 $("filter").addEventListener("change", renderJobs);
 $("search").addEventListener("input", renderJobs);
+$("file").addEventListener("change", () => {
+  const file = $("file").files && $("file").files[0];
+  $("send").disabled = !file;
+  $("upload-fill").style.width = "0%";
+  note(file ? "Ready: " + file.name + " (" + bytes(file.size) + ")" : "");
+});
+$("send").addEventListener("click", startUpload);
+$("cancel").addEventListener("click", () => {
+  if (!xhr) return;
+  xhr.abort();
+  xhr = null;
+  note("Upload cancelled.");
+  $("send").disabled = false;
+  $("cancel").disabled = true;
+  $("upload-fill").style.width = "0%";
+});
 document.querySelectorAll(".tabs [data-pane]").forEach((button) => {
   button.addEventListener("click", () => {
     state.pane = button.dataset.pane;

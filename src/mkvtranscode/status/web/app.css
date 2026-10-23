@@ -104,6 +104,23 @@ h2{font-size:17px;margin:0}
 input,select{color:inherit;border:1px solid var(--st-line);background:var(--st-bg);padding:7px 10px;border-radius:8px}
 #search{width:190px}
 
+/* upload and download section */
+.duo{display:grid;grid-template-columns:1fr 1fr}
+.half{min-width:0}
+.half + .half{border-left:1px solid var(--st-line)}
+.half-body{padding:16px 20px}
+.half-body.scroll{max-height:260px;overflow:auto}
+code{font:12px var(--st-font-mono);background:var(--st-surface-2);border-radius:5px;padding:1px 5px}
+input[type=file]{width:100%;padding:8px;border-radius:8px}
+.dl{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--st-line-soft)}
+.dl:last-child{border-bottom:0}
+.dl .what{min-width:0}
+.dl .what b{font-weight:500;display:block}
+.dl .what span{font:12px var(--st-font-mono);color:var(--st-ink-muted);overflow-wrap:anywhere}
+.dl a{font-size:12px;text-decoration:none;border:1px solid var(--st-line);border-radius:7px;padding:6px 10px;color:var(--st-accent-text);white-space:nowrap}
+.dl a:hover{border-color:var(--st-accent)}
+.dl a.disabled{color:var(--st-ink-muted);pointer-events:none}
+
 /* job list plus detail */
 .workspace{display:grid;grid-template-columns:minmax(340px,38%) minmax(0,1fr);min-height:480px}
 .jobs{border-right:1px solid var(--st-line);max-height:650px;overflow:auto}
@@ -137,7 +154,10 @@ input,select{color:inherit;border:1px solid var(--st-line);background:var(--st-b
 pre{margin:14px 0 0;padding:15px;background:var(--st-bg);border:1px solid var(--st-line-soft);border-radius:9px;font:12px/1.6 var(--st-font-mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;min-height:180px}
 
 /* queue table */
+/* queue table in a fixed box: about four rows, then a scrollbar */
 table{width:100%;border-collapse:collapse;font-size:13px}
+.table-wrap{max-height:196px;overflow:auto}
+.table-wrap thead th{position:sticky;top:0;background:var(--st-surface);z-index:1}
 th,td{text-align:left;padding:10px 20px;border-bottom:1px solid var(--st-line-soft)}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--st-ink-muted);font-weight:500}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -147,6 +167,8 @@ footer{margin-top:14px;font-size:12px;color:var(--st-ink-muted);display:flex;jus
 
 @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:950px){
+  .duo{grid-template-columns:1fr}
+  .half + .half{border-left:0;border-top:1px solid var(--st-line)}
   .cards{grid-template-columns:repeat(2,1fr)}
   .workspace{grid-template-columns:1fr}
   .jobs{border-right:0;border-bottom:1px solid var(--st-line);max-height:260px}

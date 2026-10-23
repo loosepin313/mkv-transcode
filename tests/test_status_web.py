@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from mkvtranscode.config import Config
@@ -53,7 +54,14 @@ def seed(config):
                        (time.time() - 3600, running.input))
     state.conn.commit()
 
-    done = JobRecord(input="/data/incoming/B.mkv", output="/lib/B (2019)/B (2019).mkv",
+    library = os.path.join(config.paths.transcoded, "B (2019)")
+    os.makedirs(library, exist_ok=True)
+    output = os.path.join(library, "B (2019).mkv")
+    with open(output, "wb") as handle:
+        handle.write(b"mkv" * 200)
+    with open(os.path.join(library, "B (2019).nfo"), "w", encoding="utf-8") as handle:
+        handle.write("<movie></movie>\n")
+    done = JobRecord(input="/data/incoming/B.mkv", output=output,
                      source_size=2000, title="B", year=2019,
                      imdb_id="tt0000002", profile="av1")
     state.start_job(done)
@@ -148,6 +156,14 @@ def fetch(port, path):
         return done.status, done.read()
 
 
+def fetch_any(port, path):
+    """Return (status, body) for any HTTP result."""
+    try:
+        return fetch(port, path)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
 def test_server_serves_the_page_and_the_json(tmp_path):
     config = make_config(tmp_path)
     seed(config)
@@ -178,3 +194,162 @@ def test_server_serves_the_page_and_the_json(tmp_path):
         httpd.shutdown()
         httpd.server_close()
         worker.join(timeout=5)
+
+
+def post(port, path, body, content_type="application/octet-stream"):
+    request = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), data=body,
+                                     method="POST")
+    request.add_header("Content-Type", content_type)
+    try:
+        with urllib.request.urlopen(request, timeout=5) as done:
+            return done.status, done.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
+def put(port, path, body):
+    """curl -T style upload."""
+    request = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), data=body,
+                                     method="PUT")
+    try:
+        with urllib.request.urlopen(request, timeout=5) as done:
+            return done.status, done.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+
+
+def with_server(config, allow_upload=False, max_upload_bytes=0):
+    httpd = make_server(config, "127.0.0.1", 0, allow_upload=allow_upload,
+                        max_upload_bytes=max_upload_bytes)
+    worker = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.1})
+    worker.daemon = True
+    worker.start()
+    return httpd, worker
+
+
+def test_snapshot_lists_downloads_and_upload_state(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    data = snapshot(config, allow_upload=True, max_upload_bytes=1024)
+    kinds = sorted(item["kind"] for item in data["downloads"])
+    assert kinds == ["nfo", "output"]
+    assert data["downloads"][0]["label"] == "B (2019)"
+    assert data["downloads"][0]["path"] == os.path.join("B (2019)", "B (2019).mkv")
+    assert data["upload"]["enabled"] is True
+    assert data["upload"]["max_bytes"] == 1024
+    assert data["upload"]["extensions"] == ["mkv"]
+
+
+def test_upload_is_off_by_default(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/upload?name=New.mkv", b"data")
+        assert code == 403
+        assert b"--allow-upload" in body
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_upload_lands_in_incoming(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config, allow_upload=True, max_upload_bytes=10_000)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/upload?name=New%20Film.mkv", b"x" * 4096)
+        assert code == 200
+        assert json.loads(body.decode("utf-8"))["size"] == 4096
+        target = os.path.join(config.paths.incoming, "New Film.mkv")
+        assert os.path.isfile(target) and os.path.getsize(target) == 4096
+        # curl -T sends PUT, so that route must work too.
+        assert put(port, "/api/upload?name=Via%20PUT.mkv", b"y" * 2048)[0] == 200
+        assert os.path.getsize(os.path.join(config.paths.incoming, "Via PUT.mkv")) == 2048
+        # The hidden part file must be gone, and the mode must be private.
+        assert not [n for n in os.listdir(config.paths.incoming) if n.startswith(".")]
+        assert os.stat(target).st_mode & 0o777 == 0o600
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_upload_rejects_bad_names_sizes_and_duplicates(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config, allow_upload=True, max_upload_bytes=100)
+    port = httpd.server_address[1]
+    try:
+        assert post(port, "/api/upload?name=../escape.mkv", b"x")[0] == 400
+        assert post(port, "/api/upload?name=notes.txt", b"x")[0] == 400
+        assert post(port, "/api/upload?name=Big.mkv", b"x" * 500)[0] == 413
+        post(port, "/api/upload?name=Twice.mkv", b"x" * 10)
+        assert post(port, "/api/upload?name=Twice.mkv", b"x" * 10)[0] == 409
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_download_route_serves_library_files(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        rel = urllib.parse.quote(os.path.join("B (2019)", "B (2019).mkv"))
+        code, body = fetch(port, "/api/file?kind=output&path=" + rel)
+        assert code == 200 and body == b"mkv" * 200
+        assert fetch_any(port, "/api/file?kind=nope&path=x")[0] == 400
+        escape = urllib.parse.quote("../" + os.path.basename(str(tmp_path)) + "/x.mkv")
+        assert fetch_any(port, "/api/file?kind=output&path=" + escape)[0] == 404
+        # The nfo sits in the same folder, so the path must include it.
+        nfo = urllib.parse.quote(os.path.join("B (2019)", "B (2019).nfo"))
+        assert fetch(port, "/api/file?kind=nfo&path=" + nfo)[0] == 200
+        # A video name is not allowed under the nfo kind.
+        assert fetch_any(port, "/api/file?kind=nfo&path=" + rel)[0] == 400
+        assert fetch(port, "/api/file?kind=log&path=A.mkv.log")[0] == 200
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_queue_says_why_a_file_is_ignored(tmp_path):
+    """The page must give the same reason the scanner uses."""
+    config = make_config(tmp_path)
+    seed(config)
+    with open(os.path.join(config.paths.incoming, "_notes.mkv"), "wb") as handle:
+        handle.write(b"x" * 4096)
+    with open(os.path.join(config.paths.incoming, "clip.avi"), "wb") as handle:
+        handle.write(b"x" * 4096)
+    reasons = {item["name"]: item["reason"] for item in snapshot(config)["queue"]}
+    assert reasons["D.mkv"] == "below min_size_mb"
+    assert reasons["_notes.mkv"] == "ignored name"
+    assert reasons["clip.avi"] == "wrong extension"
+    assert snapshot(config)["queue"][0]["min_size_bytes"] == 50 * 1024 * 1024
+
+
+def test_page_orders_the_sections_for_an_operator(tmp_path):
+    """Cards, then transfer, then the queue, then the job list."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    order = [page.index(marker) for marker in (
+        '<div class="cards">',
+        '<h2>Upload to incoming</h2>',
+        '<h2>Incoming queue</h2>',
+        '<h2>Jobs</h2>',
+    )]
+    assert order == sorted(order)
+    assert 'class="table-wrap"' in page

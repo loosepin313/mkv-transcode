@@ -136,6 +136,8 @@ mkv-transcode status-web --interval 2 --recent 200
 | `--port` | `8090` | Port to listen on. |
 | `--interval` | `5.0` | Seconds between browser refreshes. |
 | `--recent` | `80` | Jobs to keep in the list. |
+| `--allow-upload` | off | Let the page write files into `incoming`. |
+| `--max-upload-gb` | `60` | Largest upload in GiB. `0` means no cap. |
 
 The page has no login. See [STATUS-WEB.md](STATUS-WEB.md).
 

@@ -52,6 +52,38 @@
   </div>
 </div>
 
+<section class="panel duo">
+  <div class="half">
+    <div class="panel-bar"><h2>Upload to incoming</h2><span id="upload-state" class="small"></span></div>
+    <div class="half-body">
+      <div id="upload-off" class="notice" hidden>Uploads are off. Add <code>--allow-upload</code> to the service to turn them on.</div>
+      <div id="upload-form">
+        <div class="controls">
+          <input id="file" type="file">
+          <button id="send" class="primary" type="button" disabled>Start upload</button>
+          <button id="cancel" type="button" disabled>Cancel</button>
+        </div>
+        <div class="bar" id="upload-bar"><i id="upload-fill"></i></div>
+        <div id="upload-note" class="small"></div>
+      </div>
+    </div>
+  </div>
+  <div class="half">
+    <div class="panel-bar"><h2>Downloads</h2><span id="download-note" class="small"></span></div>
+    <div class="half-body scroll" id="downloads"></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-bar"><h2>Incoming queue</h2><span id="queue-note" class="small"></span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>File</th><th class="num">Size</th><th class="num">Age</th><th>State</th></tr></thead>
+      <tbody id="queue"></tbody>
+    </table>
+  </div>
+</section>
+
 <section class="panel">
   <div class="panel-bar">
     <h2>Jobs</h2>
@@ -97,14 +129,6 @@
       </div>
     </div>
   </div>
-</section>
-
-<section class="panel">
-  <div class="panel-bar"><h2>Incoming queue</h2><span id="queue-note" class="small"></span></div>
-  <table>
-    <thead><tr><th>File</th><th class="num">Size</th><th class="num">Age</th><th>State</th></tr></thead>
-    <tbody id="queue"></tbody>
-  </table>
 </section>
 
 <footer>

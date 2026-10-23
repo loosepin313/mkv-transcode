@@ -15,6 +15,11 @@ Environment=MKVTC_CONFIG=/etc/mkv-transcode/config.toml
 # The page has no login. 0.0.0.0 serves it to your local network only.
 # Change the address with: sudo systemctl edit mkv-transcode-status.service
 ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5
+# Uploads write into incoming, so they stay off in the shipped unit. To turn
+# them on, use a drop-in (sudo systemctl edit mkv-transcode-status.service):
+#   [Service]
+#   ExecStart=
+#   ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5 --allow-upload
 Restart=on-failure
 RestartSec=15
 

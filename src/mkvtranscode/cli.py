@@ -142,6 +142,10 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--interval", type=float, default=5.0,
                      help="seconds between browser refreshes")
     web.add_argument("--recent", type=int, default=80, help="jobs to keep in the list")
+    web.add_argument("--allow-upload", action="store_true",
+                     help="let the page send files into incoming. Off by default")
+    web.add_argument("--max-upload-gb", type=float, default=60.0,
+                     help="largest upload in GiB. 0 means no limit")
     add("config", help="print the effective configuration")
     add("config-file", help="print the default configuration as TOML")
 
@@ -351,10 +355,12 @@ def _cmd_status(config: Config) -> int:
 
 
 def _cmd_status_web(config: Config, args: argparse.Namespace) -> int:
-    """Serve the status page. The server reads files and writes nothing."""
+    """Serve the status page. The server writes only uploaded files."""
     from .status.server import serve
+    max_bytes = int(args.max_upload_gb * 1024 ** 3) if args.max_upload_gb > 0 else 0
     return serve(config, host=args.host, port=args.port, interval=args.interval,
-                 recent=args.recent)
+                 recent=args.recent, allow_upload=args.allow_upload,
+                 max_upload_bytes=max_bytes)
 
 
 def _cmd_imdb(config: Config, args: argparse.Namespace) -> int:
