@@ -454,3 +454,23 @@ def test_download_list_shows_six_files_at_a_time(tmp_path):
     assert ".half-body.scroll" not in css
     # Six rows of 59.5 px each, so the seventh row stays out of view.
     assert ".half-body.capped{max-height:358px;overflow:auto}" in css
+
+
+def test_page_carries_an_about_popup(tmp_path):
+    """The info button opens a popup with the project facts."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert 'id="info"' in page
+    assert '<div id="about" class="modal" hidden>' in page
+    assert "MIT License" in page
+    assert "https://github.com/loosepin313/mkv-transcode" in page
+    assert "<dt>Author</dt><dd>charris</dd>" in page
+    assert "openAbout" in js and 'ev.key === "Escape"' in js

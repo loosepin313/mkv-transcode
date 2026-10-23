@@ -385,6 +385,7 @@ function renderTransfer() {
     setText("upload-state", "off");
   }
   renderDownloads(s.downloads || []);
+  setText("about-version", s.version || "-");
 }
 
 function renderDownloads(items) {
@@ -529,6 +530,27 @@ $("file").addEventListener("change", () => {
   $("upload-fill").style.width = "0%";
   note(file ? "Ready: " + file.name + " (" + bytes(file.size) + ")" : "");
 });
+// ---- about popup -------------------------------------------------------
+
+function openAbout() {
+  $("about").hidden = false;
+  $("about-close").focus();
+}
+
+function closeAbout() {
+  $("about").hidden = true;
+  $("info").focus();
+}
+
+$("info").addEventListener("click", openAbout);
+$("about-close").addEventListener("click", closeAbout);
+$("about").addEventListener("click", (ev) => {
+  if (ev.target.id === "about") closeAbout();
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !$("about").hidden) closeAbout();
+});
+
 $("send").addEventListener("click", startUpload);
 $("imdb-go").addEventListener("click", searchImdb);
 $("imdb-q").addEventListener("keydown", (ev) => { if (ev.key === "Enter") searchImdb(); });
