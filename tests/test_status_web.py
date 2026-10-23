@@ -436,3 +436,20 @@ def test_imdb_search_prefers_an_exact_title(tmp_path):
     make_imdb(config)
     data = imdb_search(config, "blade runner")
     assert data["results"][0]["imdb_id"] == "tt0083658"
+
+
+def test_download_list_fills_its_panel(tmp_path):
+    """The download list has no height cap, unlike the queue box."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        css = fetch(port, "/app.css")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert '<div class="half-body" id="downloads">' in page
+    assert ".half-body.scroll" not in css
+    assert ".half-body{padding:16px 20px;flex:1}" in css

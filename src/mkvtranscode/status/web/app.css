@@ -115,11 +115,11 @@ input,select{color:inherit;border:1px solid var(--st-line);background:var(--st-b
 label.small{display:block;margin:10px 0 4px}
 
 /* upload and download section */
-.duo{display:grid;grid-template-columns:1fr 1fr}
-.half{min-width:0}
+.duo{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
+.half{min-width:0;display:flex;flex-direction:column}
 .half + .half{border-left:1px solid var(--st-line)}
-.half-body{padding:16px 20px}
-.half-body.scroll{max-height:260px;overflow:auto}
+/* the download list fills the panel, so no max-height here */
+.half-body{padding:16px 20px;flex:1}
 code{font:12px var(--st-font-mono);background:var(--st-surface-2);border-radius:5px;padding:1px 5px}
 input[type=file]{width:100%;padding:8px;border-radius:8px}
 .dl{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--st-line-soft)}

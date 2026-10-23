@@ -65,7 +65,8 @@ ExecStart=/usr/local/bin/mkv-transcode status-web --host 127.0.0.1 --port 9000
 
 Downloads are always on. The page links to each finished output and its `.nfo`
 under `paths.transcoded`. The download route only opens files inside that
-folder, and only with the extensions it expects.
+folder, and only with the extensions it expects. The list has no height cap. It
+fills the panel, and the panel grows to fit it.
 
 Uploads are off by default, because they write to `incoming`. Turn them on with
 `--allow-upload`:
