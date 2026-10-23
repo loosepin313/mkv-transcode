@@ -28,7 +28,8 @@ ProtectKernelModules=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
 RestrictRealtime=true
-RestrictAddressFamilies=AF_INET AF_INET6
+# AF_UNIX stays open so the page can ask systemd for the watcher state.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 LockPersonality=true
 LimitNOFILE=1024

@@ -95,6 +95,6 @@ reach outside the logs folder.
 |---------|---------------|
 | `cannot listen on 0.0.0.0:8090: [Errno 98] Address already in use` | Another process holds the port. Pass a different `--port`. |
 | The page says "No state file yet" | No job ran yet. The watcher creates the file on the first job. |
-| The Watcher card says `unknown` | `systemctl` is missing, or the unit is not installed. The rest of the page still works. |
+| The Watcher card says `unknown` | `systemctl` is missing, the unit is not installed, or the sandbox blocks the systemd socket. The unit must allow `AF_UNIX` in `RestrictAddressFamilies`. The rest of the page still works. |
 | The percent stays empty | The job log has no `progress pass` line yet. ffmpeg reports progress once the encode starts. |
 | A blank page after an upgrade | The web files are missing from the install. Re-run `scripts/install.sh`. |
