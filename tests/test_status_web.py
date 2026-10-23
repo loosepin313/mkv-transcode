@@ -429,3 +429,10 @@ def test_imdb_route_serves_results(tmp_path):
         httpd.shutdown()
         httpd.server_close()
         worker.join(timeout=5)
+
+
+def test_imdb_search_prefers_an_exact_title(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    data = imdb_search(config, "blade runner")
+    assert data["results"][0]["imdb_id"] == "tt0083658"

@@ -25,6 +25,9 @@ from ..util import free_bytes, which
 
 STATE_NAME = ".state.sqlite"
 UNIT = "mkv-transcode.service"
+# '~' sorts above every character a normalized title holds, so it closes a
+# prefix range on the index.
+PREFIX_END = "~"
 
 # 'progress pass 1: 2h 02m (93.9%)'
 PROGRESS_RE = re.compile(r"^progress pass (\d+): (.+?) \((\d+(?:\.\d+)?)%\)$")
@@ -296,20 +299,28 @@ def imdb_search(config: Config, term: str, limit: int = 20) -> Dict:
             if len(norm) < 2:
                 out["note"] = "type at least two letters"
                 return out
+            # A range scan on the norm_primary index, then a rank pass over the
+            # first 500 hits. A LIKE over the whole table costs seconds.
+            # '~' sorts above the letters and digits that norm_primary holds.
             rows = conn.execute(
-                "SELECT imdb_id, primary_title, title_type, year, primary_genre FROM titles "
-                "WHERE norm_primary LIKE ? ESCAPE '\\' "
-                "ORDER BY %s, year IS NULL, year DESC LIMIT ?" % TYPE_RANK,
-                (_like(norm) + "%", limit),
+                "SELECT imdb_id, primary_title, title_type, year, primary_genre FROM ("
+                " SELECT imdb_id, primary_title, title_type, year, primary_genre,"
+                " norm_primary FROM titles"
+                " WHERE norm_primary >= ? AND norm_primary < ? LIMIT 500)"
+                " ORDER BY (norm_primary = ?) DESC, %s, year IS NULL, year DESC"
+                " LIMIT ?" % TYPE_RANK,
+                (norm, norm + PREFIX_END, norm, limit),
             ).fetchall()
             if len(rows) < limit:
                 more = conn.execute(
-                    "SELECT DISTINCT t.imdb_id, t.primary_title, t.title_type, t.year, "
-                    "t.primary_genre FROM akas a JOIN titles t ON t.imdb_id = a.imdb_id "
-                    "WHERE a.norm_title LIKE ? ESCAPE '\\' "
-                    "ORDER BY %s, t.year IS NULL, t.year DESC LIMIT ?" % TYPE_RANK.replace(
-                        "title_type", "t.title_type"),
-                    (_like(norm) + "%", limit),
+                    "SELECT imdb_id, primary_title, title_type, year, primary_genre FROM ("
+                    " SELECT t.imdb_id, t.primary_title, t.title_type, t.year,"
+                    " t.primary_genre, a.norm_title"
+                    " FROM akas a JOIN titles t ON t.imdb_id = a.imdb_id"
+                    " WHERE a.norm_title >= ? AND a.norm_title < ? LIMIT 500)"
+                    " ORDER BY (norm_title = ?) DESC, %s, year IS NULL, year DESC"
+                    " LIMIT ?" % TYPE_RANK,
+                    (norm, norm + PREFIX_END, norm, limit),
                 ).fetchall()
                 seen = {row["imdb_id"] for row in rows}
                 rows.extend(row for row in more if row["imdb_id"] not in seen)
@@ -330,11 +341,6 @@ def imdb_search(config: Config, term: str, limit: int = 20) -> Dict:
     if not out["results"] and "note" not in out:
         out["note"] = "no match in the local index"
     return out
-
-
-def _like(term: str) -> str:
-    """Escape LIKE wildcards in a search term."""
-    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:

@@ -102,8 +102,10 @@ curl -T "Film (2020).mkv" "http://<host>:8090/api/upload?name=Film%20(2020).mkv"
 ## IMDb search in the upload panel
 
 The upload panel has a search box for the local IMDb index. Type a title, or
-paste an IMDb id such as `tt0083658`. The box lists up to 12 hits, films first
-and the newest year first. Each hit shows the id, the type and the main genre.
+paste an IMDb id such as `tt0083658`. The box lists up to 12 hits.
+
+An exact title match comes first, then films, then the newest year. Each hit
+shows the id, the type and the main genre.
 
 Click **Use name** and the page fills the **Upload as** field with
 `Title (Year).mkv`. That matches `naming.pattern`, so the watcher finds the same
@@ -112,6 +114,10 @@ the file name you picked.
 
 The search opens the index read only. It needs the index from
 `mkv-transcode imdb fetch`. Without it the box reports the missing index.
+
+The search reads the `norm_primary` index as a range. A hit comes back in a few
+milliseconds on a 2.5 million title index. It ranks only the first 500 prefix
+hits, which keeps the sort cheap.
 
 ## Why a queued file never starts
 
