@@ -85,6 +85,10 @@ h2{font-size:17px;margin:0}
 /* one card per GPU, shown only when the box has a GPU */
 .gpu-cards{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:0 0 18px}
 .gpu-cards .label{text-transform:none;letter-spacing:0;font-size:12px}
+/* a manual refresh pulses the page, so the click has a visible end */
+main.flash{animation:flash .6s ease-out}
+@keyframes flash{from{background:var(--st-surface-2)}to{background:transparent}}
+@media(prefers-reduced-motion:reduce){main.flash{animation:none}}
 /* live system numbers, above the GPU cards */
 .system-cards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:0 0 18px}
 .system-cards .label{text-transform:none;letter-spacing:0;font-size:12px}

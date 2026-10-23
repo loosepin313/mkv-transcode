@@ -506,7 +506,7 @@ def test_the_refresh_button_shows_that_it_ran(tmp_path):
         httpd.shutdown()
         httpd.server_close()
         worker.join(timeout=5)
-    assert '<button id="refresh" type="button">Refresh</button>' in page
+    assert '<button id="refresh" type="button" title="Get new numbers now">Refresh</button>' in page
     assert "function refreshNow()" in js
     assert 'addEventListener("click", refreshNow)' in js
     assert "button.disabled = true" in js
@@ -545,3 +545,23 @@ def test_the_card_rows_use_one_gap(tmp_path):
     for name in (".system-cards", ".gpu-cards"):
         rule = [line for line in css.splitlines() if line.startswith(name + "{")]
         assert rule and "margin:0 0 18px" in rule[0], name
+
+
+def test_a_manual_refresh_leaves_a_visible_sign(tmp_path):
+    """A local fetch ends too fast to see, so the sign must be held."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+        css = fetch(port, "/app.css")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert 'title="Get new numbers now"' in page
+    assert "Math.max(0, 500 - (Date.now() - started))" in js
+    assert 'classList.add("flash")' in js
+    assert "main.flash{animation:flash .6s ease-out}" in css
+    assert "@media(prefers-reduced-motion:reduce){main.flash{animation:none}}" in css

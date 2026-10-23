@@ -628,14 +628,24 @@ function schedule() {
 function refreshNow() {
   const button = $("refresh");
   const label = button.textContent;
+  const started = Date.now();
   button.disabled = true;
   button.textContent = "Refreshing\u2026";
   if (state.timer) clearInterval(state.timer);
   scheduled = 0;                       // re-arm the timer from this click
-  load().finally(() => {
-    button.disabled = false;
-    button.textContent = label;
-  });
+  const done = () => {
+    // A local fetch ends in a few milliseconds. Hold the sign long enough to see.
+    const wait = Math.max(0, 500 - (Date.now() - started));
+    setTimeout(() => {
+      button.disabled = false;
+      button.textContent = label;
+      const page = document.querySelector("main");
+      page.classList.remove("flash");
+      void page.offsetWidth;           // restart the animation on a repeat click
+      page.classList.add("flash");
+    }, wait);
+  };
+  load().then(done, done);
 }
 
 // ---- wiring ------------------------------------------------------------
