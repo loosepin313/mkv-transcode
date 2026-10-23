@@ -25,8 +25,7 @@ Status web page.
 - The Refresh button now shows that it ran. It reads `Refreshing...`, then
   re-arms the auto refresh from that click.
 - System cards sit above the GPU cards: CPU use with the load average, memory
-  used and free with swap, core count and CPU model, and the hottest
-  temperature sensor.
+  used and free with swap, core count and CPU model, and the CPU temperature sensor.
 
 - `mkv-transcode status-web` serves a live status page. It shows the watcher
   state, the running job with its percent, the queue, and the job history.

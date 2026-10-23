@@ -92,4 +92,5 @@ def test_the_snapshot_carries_the_system_numbers(config, monkeypatch, tmp_path):
     assert data["system"]["cores"] == 4
     assert data["system"]["cpu_model"] == "Test CPU @ 3.40GHz"
     assert data["system"]["memory"]["total_mb"] == 8.0
-    assert data["system"]["hottest_c"] == 45.5
+    assert data["system"]["top_c"] == 45.5
+    assert data["system"]["top_label"] == "k10temp"

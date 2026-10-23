@@ -87,8 +87,8 @@ function renderSystem() {
     bar: mem.total_mb ? (mem.used_mb / mem.total_mb) * 100 : null,
   });
   cards.push({ label: "Cores", value: String(sys.cores || "\u2014"), sub: sys.cpu_model || "" });
-  if (sys.hottest_c !== null && sys.hottest_c !== undefined) {
-    cards.push({ label: "Temperature", value: Math.round(sys.hottest_c) + " C", sub: sys.hottest_label || "" });
+  if (sys.top_c !== null && sys.top_c !== undefined) {
+    cards.push({ label: "Temperature", value: Math.round(sys.top_c) + " C", sub: sys.top_label || "" });
   }
   cards.forEach((item) => {
     const card = document.createElement("div");

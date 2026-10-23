@@ -192,7 +192,7 @@ def system_stats(cache_seconds: float = 2.0) -> Dict:
         return data
     mem = memory()
     temps = temperatures()
-    hottest = temps[0] if temps else None
+    top = temps[0] if temps else None
     data = {
         "cpu_model": cpu_model(),
         "cores": core_count(),
@@ -200,8 +200,9 @@ def system_stats(cache_seconds: float = 2.0) -> Dict:
         "load": load_average(),
         "memory": mem,
         "temperatures": temps[:4],
-        "hottest_c": hottest["celsius"] if hottest else None,
-        "hottest_label": hottest["label"] if hottest else "",
+        # The preferred sensor, which is normally the CPU package.
+        "top_c": top["celsius"] if top else None,
+        "top_label": top["label"] if top else "",
     }
     _CACHE["at"] = now
     _CACHE["data"] = data
