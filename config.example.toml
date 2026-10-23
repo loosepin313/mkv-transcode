@@ -129,4 +129,6 @@ keep_work_dir_on_error = true
 # GPU pinning for NVENC encodes. Each running job gets one index. See docs/HARDWARE-ACCEL.md.
 [gpu]
 devices = []    # one index per job, for example [0, 1]
+split = false    # true puts one job across every index at the same time
+min_segment_seconds = 300.0    # never split a film into shorter pieces
 stats = true    # the status page reads nvidia-smi

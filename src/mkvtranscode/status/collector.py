@@ -31,8 +31,8 @@ PREFIX_END = "~"
 
 # 'progress pass 1: 2h 02m (93.9%)'
 PROGRESS_RE = re.compile(r"^progress pass (\d+): (.+?) \((\d+(?:\.\d+)?)%\)$")
-# 'gpu: 1' written when a job holds a GPU
-GPU_RE = re.compile(r"^gpu: (\d+)$")
+# 'gpu: 1' or 'gpu: 0,1' written when a job holds GPUs
+GPU_RE = re.compile(r"^gpu: (\d+(?:,\d+)*)$")
 # Plan lines the pipeline writes before ffmpeg starts.
 PLAN_RE = re.compile(r"^(input|named|video|audio|subs|quality|command):")
 NOTE_RE = re.compile(r"^(warning|audio #\d+|.*downmixed from|.*->.*for the Opus)")
@@ -183,7 +183,7 @@ def _job(row: sqlite3.Row, config: Config, log_lines: int, now: float) -> Dict:
     lines = tail(path, log_lines) if status == RUNNING else tail(path, 40)
     plan = _plan(head(path, 60))
     progress = last_progress(lines) if status == RUNNING else None
-    gpu = _gpu_index(head(path, 80)) or _gpu_index(lines)
+    gpu = _gpu_indexes(head(path, 80)) or _gpu_indexes(lines)
     entry = {
         "input": input_path,
         "name": name,
@@ -206,7 +206,8 @@ def _job(row: sqlite3.Row, config: Config, log_lines: int, now: float) -> Dict:
         "report_path": report_path(config, input_path),
         "progress": progress,
         "plan": plan,
-        "gpu": gpu,
+        "gpu": gpu[0] if gpu else None,
+        "gpus": gpu,
         "notes": _notes(lines),
     }
     if progress and entry["elapsed"] and progress["percent"] > 0.5:
@@ -527,13 +528,13 @@ def gpu_stats(config: Config) -> List[Dict]:
 _GPU_CACHE: Dict[str, object] = {"at": 0.0, "rows": []}
 
 
-def _gpu_index(lines: List[str]) -> Optional[int]:
-    """Return the GPU a job holds, read from its log. None for a CPU job."""
-    found = None
+def _gpu_indexes(lines: List[str]) -> List[int]:
+    """Return the GPUs a job holds, read from its log. Empty for a CPU job."""
+    found: List[int] = []
     for line in lines or []:
         match = GPU_RE.match(line.strip())
         if match:
-            found = int(match.group(1))
+            found = [int(part) for part in match.group(1).split(",")]
     return found
 
 

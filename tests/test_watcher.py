@@ -19,10 +19,10 @@ class StubPipeline:
         self.status = status
         self.calls = []
 
-    def process(self, path, dry_run=False, force=False, gpu=None):
+    def process(self, path, dry_run=False, force=False, devices=None):
         self.calls.append(path)
         self.gpus = getattr(self, "gpus", {})
-        self.gpus[path] = gpu
+        self.gpus[path] = devices
         return Outcome(input=path, status=self.status, output=path + ".out")
 
 

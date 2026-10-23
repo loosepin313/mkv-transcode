@@ -23,6 +23,8 @@ from .probe import MediaInfo, ffprobe
 from .scan import is_ready, list_candidates
 from .state import DONE, FAILED, SKIPPED, JobRecord, State
 from .transcode import build_plan, run_ffmpeg, verify_output
+from .transcode.segments import (audio_path, encode_segments, merge_command, plan_segments,
+                                 segment_path, write_list)
 from .util import (
     cross_device_move,
     ensure_dir,
@@ -84,7 +86,7 @@ class Pipeline:
     # ---- public API ----------------------------------------------------
 
     def process(self, path: str, dry_run: bool = False, force: bool = False,
-                gpu: Optional[int] = None) -> Outcome:
+                devices: Optional[List[int]] = None) -> Outcome:
         """Process one source file. Never raises for a normal failure."""
         started = time.time()
         outcome = Outcome(input=path, profile=self.config.video.profile)
@@ -96,7 +98,7 @@ class Pipeline:
         try:
             with FileLog(log_path, log) as journal:
                 journal.log("input: %s" % path)
-                self._run(path, dry_run, force, outcome, journal, gpu)
+                self._run(path, dry_run, force, outcome, journal, devices)
                 outcome.status = outcome.status or DONE
                 journal.log("status: %s %s" % (outcome.status, outcome.message))
         except SkipFile as exc:
@@ -135,7 +137,7 @@ class Pipeline:
     # ---- internals -----------------------------------------------------
 
     def _run(self, path: str, dry_run: bool, force: bool, outcome: Outcome, journal,
-             gpu: Optional[int] = None) -> None:
+             devices: Optional[List[int]] = None) -> None:
         config = self.config
         if os.path.islink(path):
             raise SkipFile("input is a symbolic link, not a file")
@@ -222,9 +224,9 @@ class Pipeline:
                 journal.log("warning: %s is %s, which uses RAM. A large film can fill it."
                             % (config.paths.work, mount_fstype(config.paths.work)))
 
-        if gpu is not None:
-            journal.log("gpu: %d" % gpu)
-        self._execute(plan, info, journal, gpu)
+        if devices:
+            journal.log("gpu: %s" % ",".join(str(device) for device in devices))
+        self._execute(plan, info, journal, devices)
 
         problem = verify_output(work_path, stat.st_size, config.output.min_output_ratio, info.duration)
         if problem:
@@ -251,10 +253,18 @@ class Pipeline:
         self._handle_source(path, journal)
         outcome.message = "ok"
 
-    def _execute(self, plan, info: MediaInfo, journal, gpu: Optional[int] = None) -> None:
+    def _execute(self, plan, info: MediaInfo, journal,
+                 devices: Optional[List[int]] = None) -> None:
         """Run every ffmpeg pass and stop on the first failure."""
         total = plan.passes
-        env = {"CUDA_VISIBLE_DEVICES": str(gpu)} if gpu is not None else None
+        segments = []
+        if devices and len(devices) > 1 and self.config.gpu.split and total == 1:
+            segments = plan_segments(info.duration, len(devices),
+                                     self.config.gpu.min_segment_seconds)
+        if len(segments) > 1:
+            self._execute_split(plan, info, journal, devices, segments)
+            return
+        env = {"CUDA_VISIBLE_DEVICES": str(devices[0])} if devices and len(devices) == 1 else None
         for index in range(total):
             if total > 1:
                 journal.log("pass %d of %d" % (index + 1, total))
@@ -276,6 +286,48 @@ class Pipeline:
                     "ffmpeg exited with %d: %s" % (result.returncode, _tail(result.stderr_tail))
                 )
             journal.log("pass %d finished in %s" % (index + 1, human_duration(result.seconds)))
+        self._remove_passlogs(plan)
+
+    def _execute_split(self, plan, info: MediaInfo, journal, devices: List[int],
+                       segments) -> None:
+        """Encode one file on several GPUs at the same time, then join the parts.
+
+        The join is a stream copy, so it costs no quality and little time.
+        """
+        cards = ", ".join("gpu %d" % device for device in devices)
+        journal.log("split: %d segments on %s" % (len(segments), cards))
+        for segment in segments:
+            card = devices[segment.index] if segment.index < len(devices) else None
+            journal.log("segment %d/%d: %s on %s" % (
+                segment.index + 1, len(segments), human_duration(segment.length),
+                "gpu %d" % card if card is not None else "the cpu"))
+        results = encode_segments(
+            plan, segments, devices, plan.output_path,
+            self.config.job.timeout_hours * 3600, self.config.job.nice,
+            on_progress=lambda done, percent: journal.log(
+                "progress pass 1: %s (%.1f%%)" % (human_duration(done), percent)
+            ),
+        )
+        paths = [segment_path(plan.output_path, segment.index) for segment in segments]
+        sound = audio_path(plan.output_path)
+        list_path = plan.output_path + ".concat.txt"
+        write_list(paths, list_path)
+        merged = run_ffmpeg(
+            merge_command(list_path, sound, plan, plan.output_path),
+            duration=0.0,
+            timeout_seconds=self.config.job.timeout_hours * 3600,
+            nice=self.config.job.nice,
+        )
+        if not merged.ok:
+            raise MkvTranscodeError("join failed with %d: %s"
+                                    % (merged.returncode, _tail(merged.stderr_tail)))
+        encode_seconds = sum(result.seconds for result in results)
+        journal.log("joined %d segments in %s (encode time %s)"
+                    % (len(segments), human_duration(merged.seconds),
+                       human_duration(encode_seconds)))
+        for path in paths + [sound, list_path]:
+            _remove_quiet(path)
+        _remove_quiet(list_path)
         self._remove_passlogs(plan)
 
     def _check_output_streams(self, work_path: str, source: MediaInfo, journal) -> None:
@@ -386,3 +438,11 @@ def _tail(text: str, lines: int = 4) -> str:
     if not text:
         return ""
     return " | ".join(part for part in text.strip().splitlines()[-lines:] if part)
+
+
+def _remove_quiet(path: str) -> None:
+    """Delete a temporary file and ignore a missing one."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass

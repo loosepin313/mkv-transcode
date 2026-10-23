@@ -200,10 +200,13 @@ setup and for what each GPU can encode.
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `devices` | `[]` | GPU indexes, one per job, for example `[0, 1]`. Empty means no pinning. |
+| `split` | `false` | `true` puts one job across every index. The film is cut into segments, one per card, then joined. |
+| `min_segment_seconds` | `300.0` | Never cut a film into pieces shorter than this. |
 | `stats` | `true` | The status page reads `nvidia-smi` and shows one card per GPU. |
 
 The GPU count caps the running jobs. With `devices = [0, 1]` and
-`max_parallel = 4`, the watcher still runs two jobs at a time.
+`max_parallel = 4`, the watcher still runs two jobs at a time. With
+`split = true` one job holds both cards, so one job runs at a time.
 
 ## Environment overrides
 

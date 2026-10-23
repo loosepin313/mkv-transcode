@@ -42,7 +42,7 @@ class Watcher:
         self.stop_requested = False
         self.last_rescan = 0.0
         self.gpu_pool = GpuPool(config.gpu.devices) if config.gpu.devices else None
-        self._gpu_by_path: Dict[str, Optional[int]] = {}
+        self._gpu_by_path: Dict[str, Optional[List[int]]] = {}
 
     # ---- setup ---------------------------------------------------------
 
@@ -178,7 +178,7 @@ class Watcher:
         for path in sorted(list(self.pending)):
             if len(self.running) >= self._parallel_limit():
                 return
-            if self.gpu_pool and self.gpu_pool.free_count() == 0:
+            if self.gpu_pool and self.gpu_pool.free_count() < self._devices_per_job():
                 return
             candidate = self.pending.get(path)
             if candidate is None:
@@ -196,6 +196,15 @@ class Watcher:
             self.pending.pop(path, None)
             self._start(path, dry_run)
 
+    def _devices_per_job(self) -> int:
+        """Return how many GPUs one job takes.
+
+        With gpu.split a job spreads over every card, so it takes them all.
+        """
+        if self.gpu_pool and self.config.gpu.split:
+            return len(self.gpu_pool.devices)
+        return 1
+
     def _parallel_limit(self) -> int:
         """Return how many jobs may run at once.
 
@@ -204,31 +213,32 @@ class Watcher:
         """
         limit = self.config.job.max_parallel
         if self.gpu_pool:
-            limit = min(limit, len(self.gpu_pool.devices))
+            limit = min(limit, max(1, len(self.gpu_pool.devices) // self._devices_per_job()))
         return max(1, limit)
 
     def _start(self, path: str, dry_run: bool) -> None:
-        gpu = self.gpu_pool.acquire() if self.gpu_pool else None
+        devices = self.gpu_pool.acquire(self._devices_per_job()) if self.gpu_pool else None
         self.running.append(path)
-        self._gpu_by_path[path] = gpu
-        if gpu is None:
-            log.info("start: %s", os.path.basename(path))
+        self._gpu_by_path[path] = devices
+        if devices:
+            log.info("start: %s on gpu %s", os.path.basename(path),
+                     ",".join(str(device) for device in devices))
         else:
-            log.info("start: %s on gpu %d", os.path.basename(path), gpu)
+            log.info("start: %s", os.path.basename(path))
         if self.config.job.max_parallel <= 1:
-            self._finish(self._run_job(path, dry_run, gpu))
+            self._finish(self._run_job(path, dry_run, devices))
             return
         executor = getattr(self, "_executor", None)
         if executor is None:
             executor = ThreadPoolExecutor(max_workers=self._parallel_limit())
             self._executor = executor
-        future = executor.submit(self._run_job, path, dry_run, gpu)
+        future = executor.submit(self._run_job, path, dry_run, devices)
         future.add_done_callback(self._on_future)
 
-    def _run_job(self, path: str, dry_run: bool, gpu: Optional[int]) -> Outcome:
-        """Run one job, then give its GPU back to the pool."""
+    def _run_job(self, path: str, dry_run: bool, devices: Optional[List[int]]) -> Outcome:
+        """Run one job, then give its GPUs back to the pool."""
         try:
-            return self.pipeline.process(path, dry_run=dry_run, gpu=gpu)
+            return self.pipeline.process(path, dry_run=dry_run, devices=devices)
         finally:
             self._release_gpu(path)
 

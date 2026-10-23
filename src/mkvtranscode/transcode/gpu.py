@@ -28,22 +28,26 @@ NVENC_ENCODERS = ("h264_nvenc", "hevc_nvenc", "av1_nvenc")
 
 
 class GpuPool:
-    """A pool of GPU indexes. acquire() returns None when all are busy."""
+    """A pool of GPU indexes. acquire() returns None when too few are free."""
 
     def __init__(self, devices: List[int]):
         self.devices = list(devices)
         self._free = deque(self.devices)
         self._lock = Lock()
 
-    def acquire(self) -> Optional[int]:
+    def acquire(self, count: int = 1) -> Optional[List[int]]:
+        """Take `count` indexes, or None when that many are not free."""
         with self._lock:
-            return self._free.popleft() if self._free else None
+            if len(self._free) < count:
+                return None
+            return [self._free.popleft() for _ in range(count)]
 
-    def release(self, index: Optional[int]) -> None:
-        if index is None:
+    def release(self, indexes: Optional[List[int]]) -> None:
+        if not indexes:
             return
         with self._lock:
-            self._free.append(index)
+            for index in indexes:
+                self._free.append(index)
 
     def free_count(self) -> int:
         with self._lock:

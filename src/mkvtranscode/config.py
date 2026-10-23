@@ -206,6 +206,8 @@ class GpuConfig:
     """
 
     devices: List[int] = field(default_factory=list)   # e.g. [0, 1]
+    split: bool = False              # one job uses every index at the same time
+    min_segment_seconds: float = 300.0   # never split a film into shorter pieces
     stats: bool = True                                 # the status page reads nvidia-smi
 
 
@@ -353,6 +355,8 @@ class Config:
         for index in self.gpu.devices:
             if index < 0:
                 raise ConfigError("gpu.devices must hold indexes from 0 up")
+        if self.gpu.split and len(self.gpu.devices) < 2:
+            raise ConfigError("gpu.split needs two or more indexes in gpu.devices")
         if "{title}" not in self.naming.pattern or "{year}" not in self.naming.pattern:
             raise ConfigError("naming.pattern must contain {title} and {year}")
         if not self.language.default:

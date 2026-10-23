@@ -9,6 +9,9 @@ Hardware encode with NVENC.
 - `[gpu] devices = [0, 1]` gives one GPU to each running job. The tool sets
   `CUDA_VISIBLE_DEVICES` for that ffmpeg process, so two cards encode at the
   same time. The GPU count caps `job.max_parallel`.
+- `[gpu] split = true` puts one job across every card. The film is cut into
+  segments, one per card, encoded at the same time, then joined with a stream
+  copy. Audio and subtitles are encoded once, so the join adds no padding.
 - The status page shows one card per GPU: utilisation, memory, NVENC sessions
   and fps, temperature, and the job that holds the card.
 - `doctor` checks the driver, the GPU count, and whether the GPU can encode

@@ -75,7 +75,9 @@ function renderGpus() {
   if (!gpus.length) return;
   const busy = {};
   (s.running || []).forEach((job) => {
-    if (job.gpu !== null && job.gpu !== undefined) busy[job.gpu] = job.title || job.name;
+    const label = job.title || job.name;
+    const held = (job.gpus || []).length ? job.gpus : (job.gpu === null || job.gpu === undefined ? [] : [job.gpu]);
+    held.forEach((index) => { busy[index] = label; });
   });
   gpus.forEach((gpu) => {
     const card = document.createElement("div");
@@ -132,7 +134,7 @@ function renderCards() {
     const left = [job.title || job.name];
     if (percent !== null) left.push(pct(percent), "pass " + job.progress.pass);
     if (job.eta_seconds) left.push(dur(job.eta_seconds) + " left");
-    if (job.gpu !== null && job.gpu !== undefined) left.push("GPU " + job.gpu);
+    if ((job.gpus || []).length) left.push("GPU " + job.gpus.join("+"));
     setText("running-sub", left.join(" · "));
     $("running-bar").hidden = percent === null;
     $("running-fill").style.width = (percent || 0) + "%";

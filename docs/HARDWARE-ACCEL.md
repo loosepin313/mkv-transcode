@@ -88,6 +88,48 @@ Rules:
 Each job log carries a `gpu: N` line. The status page shows the same value on
 the running job.
 
+## Split one job over two GPUs
+
+One ffmpeg process uses one GPU. To put a single film on both cards, turn on the
+split. The tool cuts the film into segments by time. Each segment encodes on its
+own card at the same time. A stream copy then joins the parts.
+
+```toml
+[gpu]
+devices = [0, 1]
+split = true
+min_segment_seconds = 300.0
+```
+
+How it works:
+
+- The tool writes one segment per card. A 2 hour film on two cards gives two
+  segments of 1 hour.
+- Each segment starts with a fresh keyframe, so the join shows no seam.
+- Audio and subtitles do not follow the split. Cutting them adds padding at
+  every join and makes the file longer than the source. The tool encodes them
+  once, in parallel with the video, and muxes them in at the join.
+- The join is a stream copy. It costs no quality, and takes a few seconds.
+- A split job holds every card, so only one such job runs at a time.
+- `min_segment_seconds` stops a short film from being cut into slivers. A film
+  shorter than twice that value runs as one piece.
+
+Measured on frank with two GTX 1660 SUPER cards and a 120 second 1080p clip:
+
+| Mode | Wall time |
+|------|-----------|
+| One ffmpeg process on one card | 61 s |
+| Two segments on two cards | 32 s |
+
+Limits of the split path:
+
+- It needs a single pass. `target_size_gb` runs two passes, so the split stays
+  off there.
+- The job needs `2 * min_segment_seconds` of running time or more.
+- The work folder holds one segment per card while the job runs. A 40 GB film
+  on two cards needs the same disk as one piece, plus a little.
+- Progress on the page is the sum of the segments, so the bar moves smoothly.
+
 ## What the status page shows
 
 When the box has a GPU, the page adds one card per GPU under the main cards.

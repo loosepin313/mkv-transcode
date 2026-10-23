@@ -13,7 +13,7 @@ nothing, except for uploaded files when you turn uploads on.
 | Jobs done card | Counts for done, failed, skipped and running jobs. |
 | Space saved card | Total source size, total output size, and the percent saved. |
 | Free space card | Free space in the library folder, and the `min_free_gb` stop level. |
-| GPU cards | One card per GPU: name, encoder utilisation, memory, NVENC sessions and fps, temperature, and the job that holds it. Shown only when the box has a GPU. |
+| GPU cards | One card per GPU: name, encoder utilisation, memory, NVENC sessions and fps, temperature, and the job that holds it. A split job shows on every card it holds. Shown only when the box has a GPU. |
 | About popup | The `i` button in the header opens a short project description, the version, the author, the MIT license, and links to the source, the docs, and the issue tracker. |
 | Upload | Send a file into `incoming` from the browser. Off by default. See Uploads and downloads. |
 | IMDb search box | Search the local IMDb index while you upload, then use the hit as the file name. |
