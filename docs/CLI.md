@@ -119,6 +119,26 @@ Show job counts and the recent job list.
 mkv-transcode status
 ```
 
+### status-web
+
+Serve the status page over HTTP. The page shows the watcher state, the running
+job with its percent, the queue, and the job history.
+
+```bash
+mkv-transcode status-web                                # 127.0.0.1:8090
+mkv-transcode status-web --host 0.0.0.0 --port 8090     # reach it from your LAN
+mkv-transcode status-web --interval 2 --recent 200
+```
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--host` | `127.0.0.1` | Address to bind. `0.0.0.0` serves the whole local network. |
+| `--port` | `8090` | Port to listen on. |
+| `--interval` | `5.0` | Seconds between browser refreshes. |
+| `--recent` | `80` | Jobs to keep in the list. |
+
+The page has no login. See [STATUS-WEB.md](STATUS-WEB.md).
+
 ### imdb
 
 Manage the local IMDb index.

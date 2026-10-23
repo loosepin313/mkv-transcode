@@ -120,8 +120,15 @@ sudo systemctl enable --now mkv-transcode.service
 journalctl -u mkv-transcode -f
 ```
 
+Add the status page next to the watcher. It shows live progress in a browser:
+
+```bash
+sudo systemctl enable --now mkv-transcode-status.service   # http://<host>:8090
+```
+
 See [docs/SYSTEMD.md](docs/SYSTEMD.md) for the user-mode service and the
-timer-based alternative.
+timer-based alternative, and [docs/STATUS-WEB.md](docs/STATUS-WEB.md) for the
+status page.
 
 ## Output format
 
@@ -148,6 +155,7 @@ The `hevc` and `h264` profiles exist for older players. See
 | `mkv-transcode process FILE...` | Process named files now. |
 | `mkv-transcode list` | List files in `incoming` and their state. |
 | `mkv-transcode status` | Show the job history. |
+| `mkv-transcode status-web` | Serve the status page on `http://127.0.0.1:8090`. |
 | `mkv-transcode config` | Print the effective configuration as JSON. |
 | `mkv-transcode config-file` | Print the default configuration as TOML. |
 
@@ -158,6 +166,7 @@ The `hevc` and `h264` profiles exist for older players. See
 - [docs/CODEC-CHOICE.md](docs/CODEC-CHOICE.md) — why AV1, and when to use HEVC.
 - [docs/METADATA.md](docs/METADATA.md) — IMDb lookups and file naming.
 - [docs/SYSTEMD.md](docs/SYSTEMD.md) — run the watcher as a service.
+- [docs/STATUS-WEB.md](docs/STATUS-WEB.md) — watch a run in a browser.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules and data flow.
 - [docs/CLI.md](docs/CLI.md) — command and flag reference.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures.

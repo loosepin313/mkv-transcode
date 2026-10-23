@@ -38,7 +38,7 @@ Documentation = "https://github.com/loosepin313/mkv-transcode/tree/main/docs"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mkvtranscode = ["py.typed"]
+mkvtranscode = ["py.typed", "status/web/*.html", "status/web/*.css", "status/web/*.js", "status/web/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

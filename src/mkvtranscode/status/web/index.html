@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mkv-transcode Monitor</title>
+<meta name="description" content="Live status for the mkv-transcode watcher.">
+<link rel="stylesheet" href="/app.css">
+<script defer src="/app.js"></script>
+</head>
+<body>
+<header>
+  <div class="brand">mkv-transcode <span>Media library</span></div>
+  <div class="controls">
+    <span id="profile" class="pill">loading…</span>
+    <button id="refresh">Refresh</button>
+    <button id="theme" aria-label="Switch color theme">Light / dark</button>
+  </div>
+</header>
+<main>
+<div class="top">
+  <div><h1>Transcode Monitor</h1><p class="sub">Watcher status, live progress, and job history.</p></div>
+</div>
+
+<div id="error" class="notice" role="status" hidden></div>
+
+<div class="cards">
+  <div class="card" id="service-card">
+    <div class="label">Watcher</div>
+    <div id="service" class="value"><span class="dot"></span><span id="service-text">Connecting…</span></div>
+    <div id="incoming" class="model">—</div>
+  </div>
+  <div class="card" id="running-card">
+    <div class="label">Now encoding</div>
+    <div id="running" class="value">—</div>
+    <div id="running-sub" class="small">Idle</div>
+    <div class="bar" id="running-bar" hidden><i id="running-fill"></i></div>
+  </div>
+  <div class="card">
+    <div class="label">Jobs done</div>
+    <div id="done" class="value">—</div>
+    <div id="done-sub" class="small">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Space saved</div>
+    <div id="saved" class="value">—</div>
+    <div id="saved-sub" class="small">—</div>
+  </div>
+  <div class="card">
+    <div class="label">Free space</div>
+    <div id="free" class="value">—</div>
+    <div id="free-sub" class="small">—</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-bar">
+    <h2>Jobs</h2>
+    <div class="filters">
+      <input id="search" aria-label="Filter jobs" placeholder="Search title or file">
+      <select id="filter" aria-label="Job status">
+        <option value="all">All statuses</option>
+        <option value="running">Running</option>
+        <option value="done">Done</option>
+        <option value="failed">Failed</option>
+        <option value="skipped">Skipped</option>
+      </select>
+    </div>
+  </div>
+  <div class="workspace">
+    <div id="jobs" class="jobs" aria-label="Job list"></div>
+    <div class="detail">
+      <div id="no-selection" class="empty"><strong>Inspect a job</strong>Select a job to see its plan, its log, and its report.</div>
+      <div id="selection" hidden>
+        <div class="row"><div id="detail-title" class="detail-title"></div><span id="detail-status" class="tag"></span></div>
+        <div id="detail-time" class="small"></div>
+        <div class="bar" id="detail-bar" hidden><i id="detail-fill"></i></div>
+        <div class="facts">
+          <div class="fact"><span>Source</span><b id="detail-source">—</b></div>
+          <div class="fact"><span>Output</span><b id="detail-output">—</b></div>
+          <div class="fact"><span>Space saved</span><b id="detail-saved">—</b></div>
+          <div class="fact"><span>Encode time</span><b id="detail-time-taken">—</b></div>
+          <div class="fact"><span>Started</span><b id="detail-started">—</b></div>
+          <div class="fact"><span>Elapsed</span><b id="detail-elapsed">—</b></div>
+          <div class="fact"><span>Left</span><b id="detail-eta">—</b></div>
+          <div class="fact"><span>Profile</span><b id="detail-profile">—</b></div>
+        </div>
+        <div id="detail-error" class="detail-error" hidden></div>
+        <div id="detail-notes" class="notes" hidden></div>
+        <div class="tabs" role="tablist" aria-label="Job detail">
+          <button role="tab" data-pane="plan" aria-selected="true">Plan</button>
+          <button role="tab" data-pane="log" aria-selected="false">Log</button>
+          <button role="tab" data-pane="report" aria-selected="false">Report</button>
+          <button id="copy">Copy</button>
+        </div>
+        <div id="content-note" class="small" style="margin-top:10px"></div>
+        <pre id="content" role="tabpanel" aria-label="Job content"></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-bar"><h2>Incoming queue</h2><span id="queue-note" class="small"></span></div>
+  <table>
+    <thead><tr><th>File</th><th class="num">Size</th><th class="num">Age</th><th>State</th></tr></thead>
+    <tbody id="queue"></tbody>
+  </table>
+</section>
+
+<footer>
+  <span id="foot-left">The page reads the state file and the job logs. It changes nothing.</span>
+  <span id="updated">Connecting…</span>
+</footer>
+</main>
+</body>
+</html>

@@ -6,7 +6,7 @@ VENV   := .venv
 BIN    := $(VENV)/bin/mkv-transcode
 PREFIX ?= /opt/mkv-transcode
 
-.PHONY: help venv test lint doctor plan once run clean install install-systemd install-user uninstall config
+.PHONY: help venv test lint doctor plan once run status-web clean install install-systemd install-user uninstall config
 
 help:
 	@echo "targets:"
@@ -16,6 +16,7 @@ help:
 	@echo "  config           print the default configuration as TOML"
 	@echo "  run              start the watcher in the foreground"
 	@echo "  once             scan incoming once and process every ready file"
+	@echo "  status-web       serve the status page on http://127.0.0.1:8090"
 	@echo "  install          install into $(PREFIX) with a launcher in /usr/local/bin"
 	@echo "  install-systemd  install the app and the system units"
 	@echo "  install-user     install the app and the user units"
@@ -42,6 +43,9 @@ run: $(BIN)
 
 once: $(BIN)
 	$(BIN) once
+
+status-web: $(BIN)
+	$(BIN) status-web --host 0.0.0.0 --port 8090
 
 install:
 	sudo scripts/install.sh

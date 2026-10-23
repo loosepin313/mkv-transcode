@@ -130,6 +130,21 @@ journalctl -u mkv-transcode -p warning
 
 Each job also writes a full log and a JSON report under `paths.logs`.
 
+## Status page unit
+
+`mkv-transcode-status.service` serves a live page on port 8090. It shows the
+watcher state, the running job with its percent, the queue, and the history.
+The unit sets `BindsTo=mkv-transcode.service`, so the page starts with the
+watcher and stops when the watcher stops.
+
+```bash
+sudo systemctl enable --now mkv-transcode-status.service
+journalctl -u mkv-transcode-status -f
+```
+
+The page has no login. The unit binds to `0.0.0.0`, so keep that port inside
+your local network. See [STATUS-WEB.md](STATUS-WEB.md).
+
 ## Stop, pause and resume
 
 ```bash

@@ -1,0 +1,37 @@
+[Unit]
+Description=mkv-transcode status web page
+Documentation=file:///opt/mkv-transcode/doc/STATUS-WEB.md
+After=mkv-transcode.service network-online.target
+Wants=network-online.target
+# BindsTo keeps the page tied to the watcher. Starting this unit starts the
+# watcher, and a stopped watcher stops the page.
+BindsTo=mkv-transcode.service
+
+[Service]
+Type=simple
+User=mkvtranscode
+Group=mkvtranscode
+Environment=MKVTC_CONFIG=/etc/mkv-transcode/config.toml
+# The page has no login. 0.0.0.0 serves it to your local network only.
+# Change the address with: sudo systemctl edit mkv-transcode-status.service
+ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5
+Restart=on-failure
+RestartSec=15
+
+# The page only reads files, so it needs no write access at all.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=true
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target

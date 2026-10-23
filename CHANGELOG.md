@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Status web page.
+
+- `mkv-transcode status-web` serves a live status page. It shows the watcher
+  state, the running job with its percent, the queue, and the job history.
+- The page reads the state file, the job logs and the reports. It opens the
+  state file read only and writes nothing.
+- `mkv-transcode-status.service` runs the page. `BindsTo` ties it to the
+  watcher, so a stopped watcher stops the page too.
+
 Security and hardening.
 
 - The scanner and the pipeline now skip symbolic links. A link inside

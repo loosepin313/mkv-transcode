@@ -78,4 +78,5 @@ if [ "$install_systemd" = "1" ]; then
   echo "  1. edit $config_dir/config.toml and set the paths"
   echo "  2. create the incoming and transcoded directories, owned by $service_user"
   echo "  3. systemctl enable --now mkv-transcode.service"
+  echo "  4. systemctl enable --now mkv-transcode-status.service   # page on port 8090"
 fi

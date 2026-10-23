@@ -134,6 +134,14 @@ def build_parser() -> argparse.ArgumentParser:
     imdb_sub.add_parser("remove", help="delete the local index and the downloaded files")
 
     add("doctor", help="check the machine and the configuration")
+
+    web = add("status-web", help="serve the transcode status page over HTTP")
+    web.add_argument("--host", default="127.0.0.1",
+                     help="address to bind. Use 0.0.0.0 to reach the page from your LAN")
+    web.add_argument("--port", type=int, default=8090, help="port to listen on")
+    web.add_argument("--interval", type=float, default=5.0,
+                     help="seconds between browser refreshes")
+    web.add_argument("--recent", type=int, default=80, help="jobs to keep in the list")
     add("config", help="print the effective configuration")
     add("config-file", help="print the default configuration as TOML")
 
@@ -209,6 +217,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             return _cmd_imdb(config, args)
         if args.command == "doctor":
             return _cmd_doctor(config)
+        if args.command == "status-web":
+            return _cmd_status_web(config, args)
         if args.command == "config":
             return _cmd_config(config)
         if args.command == "config-file":
@@ -338,6 +348,13 @@ def _cmd_status(config: Config) -> int:
     finally:
         state.close()
     return EXIT_OK
+
+
+def _cmd_status_web(config: Config, args: argparse.Namespace) -> int:
+    """Serve the status page. The server reads files and writes nothing."""
+    from .status.server import serve
+    return serve(config, host=args.host, port=args.port, interval=args.interval,
+                 recent=args.recent)
 
 
 def _cmd_imdb(config: Config, args: argparse.Namespace) -> int:
