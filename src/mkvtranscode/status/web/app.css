@@ -81,12 +81,12 @@ h2{font-size:17px;margin:0}
 .pill{font:12px var(--st-font-mono);border:1px solid var(--st-line);border-radius:9999px;padding:6px 11px;color:var(--st-ink-muted);background:var(--st-surface)}
 
 /* cards */
-.cards{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:14px;margin:24px 0}
+.cards{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:14px;margin:24px 0 18px}
 /* one card per GPU, shown only when the box has a GPU */
-.gpu-cards{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:-8px 0 18px}
+.gpu-cards{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:0 0 18px}
 .gpu-cards .label{text-transform:none;letter-spacing:0;font-size:12px}
 /* live system numbers, above the GPU cards */
-.system-cards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:18px 0 10px}
+.system-cards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:0 0 18px}
 .system-cards .label{text-transform:none;letter-spacing:0;font-size:12px}
 .system-cards .value{font-size:22px}
 .system-cards .model{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

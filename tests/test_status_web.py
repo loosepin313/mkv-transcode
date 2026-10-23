@@ -490,7 +490,7 @@ def test_the_page_title_carries_the_hostname(tmp_path):
         httpd.server_close()
         worker.join(timeout=5)
     assert '<h1 id="page-title">Transcode Monitor</h1>' in page
-    assert '"Transcode Monitor" + (host ? " (" + host + ")" : "")' in js
+    assert '"Transcode Monitor" + (host ? " (running on " + host + ")" : "")' in js
     assert data["host"]
 
 
@@ -528,3 +528,20 @@ def test_the_page_holds_a_system_card_row(tmp_path):
     assert page.index('id="system-cards"') < page.index('id="gpu-cards"')
     assert "function renderSystem()" in js
     assert "renderSystem();" in js
+
+
+def test_the_card_rows_use_one_gap(tmp_path):
+    """Card rows and panels share one bottom gap, and nothing pulls itself up."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        css = fetch(port, "/app.css")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert "margin:-" not in css
+    for name in (".system-cards", ".gpu-cards"):
+        rule = [line for line in css.splitlines() if line.startswith(name + "{")]
+        assert rule and "margin:0 0 18px" in rule[0], name

@@ -174,7 +174,7 @@ function renderCards() {
   setText("service-text", service === "active" ? "Watching" : service);
   setText("incoming", s.config ? s.config.paths.incoming : "—");
   const host = s.host || "";
-  setText("page-title", "Transcode Monitor" + (host ? " (" + host + ")" : ""));
+  setText("page-title", "Transcode Monitor" + (host ? " (running on " + host + ")" : ""));
   document.title = "mkv-transcode Monitor" + (host ? " (" + host + ")" : "");
   setText("profile", s.config
     ? s.config.profile + " · " + s.config.encoder + " · CRF " + s.config.crf + " · preset " + s.config.preset
