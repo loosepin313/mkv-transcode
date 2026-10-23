@@ -321,6 +321,54 @@ function renderQueue() {
   });
 }
 
+// ---- imdb search in the upload panel ----------------------------------
+
+let imdbTimer = null;
+
+function searchImdb() {
+  const term = $("imdb-q").value.trim();
+  if (!term) {
+    $("imdb-results").textContent = "";
+    setText("imdb-note", "");
+    return;
+  }
+  setText("imdb-note", "searching ...");
+  fetch("/api/imdb?q=" + encodeURIComponent(term) + "&limit=12")
+    .then((r) => r.json())
+    .then((data) => renderImdb(data))
+    .catch(() => setText("imdb-note", "the search failed"));
+}
+
+function renderImdb(data) {
+  const box = $("imdb-results");
+  box.textContent = "";
+  const results = data.results || [];
+  setText("imdb-note", results.length ? results.length + " match(es) in the local index"
+    : (data.note || "no match"));
+  results.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "res";
+    const what = document.createElement("div");
+    what.className = "t";
+    const title = document.createElement("b");
+    title.textContent = item.title + (item.year ? " (" + item.year + ")" : " (" + (item.type || "?") + ")");
+    const meta = document.createElement("span");
+    meta.textContent = [item.imdb_id, item.type, item.genre].filter(Boolean).join(" · ");
+    what.appendChild(title);
+    what.appendChild(meta);
+    const use = document.createElement("button");
+    use.type = "button";
+    use.textContent = "Use name";
+    use.addEventListener("click", () => {
+      $("upload-as").value = item.title + (item.year ? " (" + item.year + ")" : "") + ".mkv";
+      setText("imdb-note", "Upload as set to " + $("upload-as").value);
+    });
+    row.appendChild(what);
+    row.appendChild(use);
+    box.appendChild(row);
+  });
+}
+
 // ---- upload and download ----------------------------------------------
 
 let xhr = null;
@@ -377,8 +425,9 @@ function startUpload() {
   const input = $("file");
   const file = input.files && input.files[0];
   if (!file || xhr) return;
+  const name = ($("upload-as").value || "").trim() || file.name;
   xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/upload?name=" + encodeURIComponent(file.name));
+  xhr.open("POST", "/api/upload?name=" + encodeURIComponent(name));
   const total = file.size;
   xhr.upload.onprogress = (ev) => {
     const percent = ev.lengthComputable ? (ev.loaded / total) * 100 : 0;
@@ -412,7 +461,7 @@ function startUpload() {
   $("send").disabled = true;
   $("cancel").disabled = false;
   $("upload-fill").style.width = "0%";
-  note("Sending " + file.name + " ...");
+  note("Sending " + name + " ...");
   xhr.send(file);
 }
 
@@ -481,6 +530,12 @@ $("file").addEventListener("change", () => {
   note(file ? "Ready: " + file.name + " (" + bytes(file.size) + ")" : "");
 });
 $("send").addEventListener("click", startUpload);
+$("imdb-go").addEventListener("click", searchImdb);
+$("imdb-q").addEventListener("keydown", (ev) => { if (ev.key === "Enter") searchImdb(); });
+$("imdb-q").addEventListener("input", () => {
+  if (imdbTimer) clearTimeout(imdbTimer);
+  imdbTimer = setTimeout(searchImdb, 400);
+});
 $("cancel").addEventListener("click", () => {
   if (!xhr) return;
   xhr.abort();

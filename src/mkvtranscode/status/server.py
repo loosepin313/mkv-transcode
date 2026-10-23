@@ -17,7 +17,7 @@ from urllib.parse import unquote
 
 from ..log import get_logger
 from ..util import free_bytes
-from .collector import job_detail, safe_under, snapshot
+from .collector import imdb_search, job_detail, safe_under, snapshot
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
@@ -170,6 +170,20 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/health":
             self._send(200, b"ok\n", CONTENT_TYPES[".txt"])
+            return
+        if path.startswith("/api/imdb"):
+            params = self._query()
+            try:
+                limit = int(params.get("limit") or 20)
+            except ValueError:
+                limit = 20
+            try:
+                data = imdb_search(self.config, params.get("q", ""), limit)
+            except Exception as exc:                      # keep the page alive
+                log.warning("imdb search failed: %s", exc)
+                data = {"query": params.get("q", ""), "results": [], "note": str(exc)}
+            body = json.dumps(data, indent=1, sort_keys=True).encode("utf-8")
+            self._send(200, body, CONTENT_TYPES[".json"])
             return
         if path.startswith("/api/file"):
             params = self._query()

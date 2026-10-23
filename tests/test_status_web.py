@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import threading
 import time
 import urllib.error
@@ -10,7 +11,7 @@ import urllib.request
 
 from mkvtranscode.config import Config
 from mkvtranscode.state import DONE, FAILED, RUNNING, JobRecord, State
-from mkvtranscode.status.collector import job_detail, snapshot
+from mkvtranscode.status.collector import imdb_search, job_detail, snapshot
 from mkvtranscode.status.server import make_server
 
 LOG_TEXT = """---- log started ----
@@ -34,6 +35,7 @@ def make_config(tmp_path):
     config.paths.work = os.path.join(root, "workdir")
     config.paths.logs = os.path.join(root, "logs")
     config.paths.processed = os.path.join(root, "processed")
+    config.paths.imdb_data = os.path.join(root, "imdb")
     for folder in (config.paths.incoming, config.paths.transcoded, config.paths.work,
                    config.paths.logs, config.paths.processed):
         os.makedirs(folder, exist_ok=True)
@@ -353,3 +355,77 @@ def test_page_orders_the_sections_for_an_operator(tmp_path):
     )]
     assert order == sorted(order)
     assert 'class="table-wrap"' in page
+
+
+TITLES = [
+    ("tt0083658", "Blade Runner", "Blade Runner", "blade runner", "blade runner",
+     "movie", 1982, 117, "Sci-Fi"),
+    ("tt1856101", "Blade Runner 2049", "Blade Runner 2049", "blade runner 2049",
+     "blade runner 2049", "movie", 2017, 164, "Sci-Fi"),
+    ("tt0103644", "Alien 3", "Alien 3", "alien 3", "alien 3", "movie", 1992, 114, "Horror"),
+    ("tt0000123", "Blades of Glory", "Blades of Glory", "blades of glory",
+     "blades of glory", "movie", 2007, 93, "Comedy"),
+]
+
+
+def make_imdb(config):
+    """Build a small IMDb index with the shipped schema."""
+    from mkvtranscode.metadata.imdb_dataset import SCHEMA
+
+    os.makedirs(config.paths.imdb_data, exist_ok=True)
+    conn = sqlite3.connect(os.path.join(config.paths.imdb_data, "imdb.sqlite"))
+    conn.executescript(SCHEMA)
+    conn.executemany("INSERT INTO titles VALUES (?,?,?,?,?,?,?,?,?)", TITLES)
+    conn.execute("INSERT INTO akas VALUES (?,?,?)", ("tt0103644", "alien three", "Alien Three"))
+    conn.commit()
+    conn.close()
+
+
+def test_imdb_search_matches_a_prefix(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    data = imdb_search(config, "blade")
+    ids = [item["imdb_id"] for item in data["results"]]
+    assert "tt0083658" in ids and "tt1856101" in ids and "tt0000123" in ids
+    # Films first, then the newest year, which matches IMDb search order.
+    assert data["results"][0]["year"] == 2017
+
+
+def test_imdb_search_falls_back_to_alternative_titles(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    data = imdb_search(config, "alien three")
+    assert [item["imdb_id"] for item in data["results"]] == ["tt0103644"]
+
+
+def test_imdb_search_accepts_an_imdb_id(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    data = imdb_search(config, "tt0083658")
+    assert data["results"][0]["title"] == "Blade Runner"
+
+
+def test_imdb_search_needs_two_letters_and_reports_a_missing_index(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    assert imdb_search(config, "b")["note"] == "type at least two letters"
+    empty = make_config(tmp_path / "second")
+    data = imdb_search(empty, "blade")
+    assert data["exists"] is False and data["results"] == []
+
+
+def test_imdb_route_serves_results(tmp_path):
+    config = make_config(tmp_path)
+    make_imdb(config)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        code, body = fetch(port, "/api/imdb?q=blade&limit=3")
+        assert code == 200
+        data = json.loads(body.decode("utf-8"))
+        assert len(data["results"]) <= 3
+        assert data["results"][0]["imdb_id"].startswith("tt")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)

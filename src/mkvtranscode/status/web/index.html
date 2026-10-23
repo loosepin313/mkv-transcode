@@ -59,6 +59,14 @@
       <div id="upload-off" class="notice" hidden>Uploads are off. Add <code>--allow-upload</code> to the service to turn them on.</div>
       <div id="upload-form">
         <div class="controls">
+          <input id="imdb-q" placeholder="Search the IMDb index" aria-label="Search the IMDb index">
+          <button id="imdb-go" type="button">Search</button>
+        </div>
+        <div id="imdb-note" class="small"></div>
+        <div id="imdb-results" class="results"></div>
+        <label class="small" for="upload-as">Upload as</label>
+        <input id="upload-as" placeholder="the name sent to incoming">
+        <div class="controls">
           <input id="file" type="file">
           <button id="send" class="primary" type="button" disabled>Start upload</button>
           <button id="cancel" type="button" disabled>Cancel</button>

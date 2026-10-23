@@ -260,6 +260,83 @@ def _queue_reason(name: str, size: int, min_bytes: int, config: Config) -> str:
     return ""
 
 
+def imdb_search(config: Config, term: str, limit: int = 20) -> Dict:
+    """Search the local IMDb index for a title.
+
+    The page uses this to name a file before upload, so the watcher matches
+    the same title later. The query is read only.
+    """
+    from ..metadata.imdb_dataset import DB_NAME, TYPE_RANK
+    from ..util import normalize_title
+
+    limit = max(1, min(int(limit or 20), 25))
+    db = os.path.join(config.paths.imdb_data, DB_NAME)
+    out = {"query": term, "index": db, "exists": os.path.isfile(db), "results": []}
+    if not out["exists"]:
+        out["note"] = "no IMDb index. Run 'mkv-transcode imdb fetch'."
+        return out
+    norm = normalize_title(term or "")
+    if not norm and not (term or "").startswith("tt"):
+        out["note"] = "type at least two letters"
+        return out
+    try:
+        conn = sqlite3.connect("file:%s?mode=ro" % pathname2url(db), uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error as exc:
+        out["note"] = "cannot open the index: %s" % exc
+        return out
+    try:
+        rows: List[sqlite3.Row] = []
+        if re.match(r"^tt\d{5,10}$", (term or "").strip().lower()):
+            rows = conn.execute(
+                "SELECT imdb_id, primary_title, title_type, year, primary_genre FROM titles "
+                "WHERE imdb_id = ?", ((term or "").strip().lower(),)
+            ).fetchall()
+        else:
+            if len(norm) < 2:
+                out["note"] = "type at least two letters"
+                return out
+            rows = conn.execute(
+                "SELECT imdb_id, primary_title, title_type, year, primary_genre FROM titles "
+                "WHERE norm_primary LIKE ? ESCAPE '\\' "
+                "ORDER BY %s, year IS NULL, year DESC LIMIT ?" % TYPE_RANK,
+                (_like(norm) + "%", limit),
+            ).fetchall()
+            if len(rows) < limit:
+                more = conn.execute(
+                    "SELECT DISTINCT t.imdb_id, t.primary_title, t.title_type, t.year, "
+                    "t.primary_genre FROM akas a JOIN titles t ON t.imdb_id = a.imdb_id "
+                    "WHERE a.norm_title LIKE ? ESCAPE '\\' "
+                    "ORDER BY %s, t.year IS NULL, t.year DESC LIMIT ?" % TYPE_RANK.replace(
+                        "title_type", "t.title_type"),
+                    (_like(norm) + "%", limit),
+                ).fetchall()
+                seen = {row["imdb_id"] for row in rows}
+                rows.extend(row for row in more if row["imdb_id"] not in seen)
+        out["results"] = [
+            {
+                "imdb_id": row["imdb_id"],
+                "title": row["primary_title"] or "",
+                "year": row["year"],
+                "type": row["title_type"] or "",
+                "genre": row["primary_genre"] or "",
+            }
+            for row in rows[:limit]
+        ]
+    except sqlite3.Error as exc:
+        out["note"] = "search failed: %s" % exc
+    finally:
+        conn.close()
+    if not out["results"] and "note" not in out:
+        out["note"] = "no match in the local index"
+    return out
+
+
+def _like(term: str) -> str:
+    """Escape LIKE wildcards in a search term."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _queue(config: Config, conn: Optional[sqlite3.Connection]) -> List[Dict]:
     """List every regular file in incoming, with the reason the scanner skips it.
 
