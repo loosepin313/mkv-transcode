@@ -20,6 +20,14 @@ Hardware encode with NVENC.
 
 Status web page.
 
+- The heading now names the box: `Transcode Monitor (frank)`. The browser tab
+  carries the same name.
+- The Refresh button now shows that it ran. It reads `Refreshing...`, then
+  re-arms the auto refresh from that click.
+- System cards sit above the GPU cards: CPU use with the load average, memory
+  used and free with swap, core count and CPU model, and the hottest
+  temperature sensor.
+
 - `mkv-transcode status-web` serves a live status page. It shows the watcher
   state, the running job with its percent, the queue, and the job history.
 - The page reads the state file, the job logs and the reports. It opens the

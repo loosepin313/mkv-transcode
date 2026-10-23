@@ -13,6 +13,7 @@ nothing, except for uploaded files when you turn uploads on.
 | Jobs done card | Counts for done, failed, skipped and running jobs. |
 | Space saved card | Total source size, total output size, and the percent saved. |
 | Free space card | Free space in the library folder, and the `min_free_gb` stop level. |
+| System cards | CPU use with the load average, memory used and free with swap, core count and CPU model, and the hottest temperature sensor. Above the GPU cards. |
 | GPU cards | One card per GPU: name, encoder utilisation, memory, NVENC sessions and fps, temperature, and the job that holds it. A split job shows on every card it holds. Shown only when the box has a GPU. |
 | About popup | The `i` button in the header opens a short project description, the version, the author, the MIT license, and links to the source, the docs, and the issue tracker. |
 | Upload | Send a file into `incoming` from the browser. Off by default. See Uploads and downloads. |
@@ -176,6 +177,7 @@ first.
 | `<imdb_data>/imdb.sqlite` | The IMDb search box. Opened read only. |
 | `systemctl is-active mkv-transcode.service` | The watcher card. |
 | `nvidia-smi --query-gpu=...` | The GPU cards. Cached for two seconds. Off with `gpu.stats = false`. |
+| `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo`, `/sys/class/hwmon` | The system cards. A virtual machine often has no temperature sensor, so that card stays out. |
 
 ## Troubleshooting
 
@@ -187,4 +189,6 @@ first.
 | The percent stays empty | The job log has no `progress pass` line yet. ffmpeg reports progress once the encode starts. |
 | The IMDb box reports a missing index | Run `mkv-transcode imdb fetch`, or point `paths.imdb_data` at the folder with `imdb.sqlite`. |
 | No GPU cards on a box with a GPU | `nvidia-smi` is missing, or the service user cannot open `/dev/nvidia*`, or `gpu.stats = false`. |
+| The CPU card shows a dash | The page needs two samples to work out CPU use. The dash clears on the next refresh. |
+| No temperature card | The box exposes no sensor. A virtual machine usually shows none. |
 | A blank page after an upgrade | The web files are missing from the install. Re-run `scripts/install.sh`. |

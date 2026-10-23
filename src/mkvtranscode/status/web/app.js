@@ -66,6 +66,59 @@ function initTheme() {
 
 // ---- cards -------------------------------------------------------------
 
+function renderSystem() {
+  const sys = state.snap.system || {};
+  const box = $("system-cards");
+  box.textContent = "";
+  const mem = sys.memory || {};
+  const cards = [];
+  const hasCpu = sys.cpu_percent !== null && sys.cpu_percent !== undefined;
+  cards.push({
+    label: "CPU",
+    value: hasCpu ? Math.round(sys.cpu_percent) + "%" : "\u2014",
+    sub: (sys.load && sys.load.length) ? "load " + sys.load.join(" / ") : "",
+    bar: hasCpu ? sys.cpu_percent : null,
+  });
+  cards.push({
+    label: "Memory",
+    value: mem.total_mb ? Math.round(mem.used_mb) + "/" + Math.round(mem.total_mb) + " MiB" : "\u2014",
+    sub: (mem.available_mb !== undefined ? Math.round(mem.available_mb) + " MiB free" : "")
+      + (mem.swap_used_mb ? " \u00b7 swap " + Math.round(mem.swap_used_mb) + " MiB" : ""),
+    bar: mem.total_mb ? (mem.used_mb / mem.total_mb) * 100 : null,
+  });
+  cards.push({ label: "Cores", value: String(sys.cores || "\u2014"), sub: sys.cpu_model || "" });
+  if (sys.hottest_c !== null && sys.hottest_c !== undefined) {
+    cards.push({ label: "Temperature", value: Math.round(sys.hottest_c) + " C", sub: sys.hottest_label || "" });
+  }
+  cards.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = item.label;
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = item.value;
+    card.appendChild(label);
+    card.appendChild(value);
+    if (item.sub) {
+      const sub = document.createElement("div");
+      sub.className = "model";
+      sub.textContent = item.sub;
+      card.appendChild(sub);
+    }
+    if (item.bar !== null && item.bar !== undefined) {
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const fill = document.createElement("i");
+      fill.style.width = Math.max(0, Math.min(100, item.bar)) + "%";
+      bar.appendChild(fill);
+      card.appendChild(bar);
+    }
+    box.appendChild(card);
+  });
+}
+
 function renderGpus() {
   const s = state.snap;
   const gpus = s.gpus || [];
@@ -120,6 +173,9 @@ function renderCards() {
   card.className = "card " + service;
   setText("service-text", service === "active" ? "Watching" : service);
   setText("incoming", s.config ? s.config.paths.incoming : "—");
+  const host = s.host || "";
+  setText("page-title", "Transcode Monitor" + (host ? " (" + host + ")" : ""));
+  document.title = "mkv-transcode Monitor" + (host ? " (" + host + ")" : "");
   setText("profile", s.config
     ? s.config.profile + " · " + s.config.encoder + " · CRF " + s.config.crf + " · preset " + s.config.preset
     : "—");
@@ -523,6 +579,7 @@ function current() {
 
 function render() {
   renderCards();
+  renderSystem();
   renderGpus();
   renderJobs();
   renderQueue();
@@ -545,7 +602,7 @@ function render() {
 }
 
 function load() {
-  fetch("/api/snapshot")
+  return fetch("/api/snapshot")
     .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then((data) => {
       state.snap = data;
@@ -567,10 +624,24 @@ function schedule() {
   state.timer = setInterval(load, state.ms);
 }
 
+// The page reloads by itself, so a manual refresh must show that it ran.
+function refreshNow() {
+  const button = $("refresh");
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Refreshing\u2026";
+  if (state.timer) clearInterval(state.timer);
+  scheduled = 0;                       // re-arm the timer from this click
+  load().finally(() => {
+    button.disabled = false;
+    button.textContent = label;
+  });
+}
+
 // ---- wiring ------------------------------------------------------------
 
 initTheme();
-$("refresh").addEventListener("click", load);
+$("refresh").addEventListener("click", refreshNow);
 $("filter").addEventListener("change", renderJobs);
 $("search").addEventListener("input", renderJobs);
 $("file").addEventListener("change", () => {

@@ -22,6 +22,7 @@ from ..config import Config
 from ..scan import PARTIAL_SUFFIXES
 from ..state import DONE, FAILED, RUNNING, SKIPPED
 from ..util import free_bytes, which
+from .system import system_stats
 
 STATE_NAME = ".state.sqlite"
 UNIT = "mkv-transcode.service"
@@ -626,4 +627,5 @@ def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120,
         "disk": _disk(config),
         "gpus": gpu_stats(config),
         "gpu_devices": list(config.gpu.devices),
+        "system": system_stats(),
     }

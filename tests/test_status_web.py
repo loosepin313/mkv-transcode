@@ -474,3 +474,57 @@ def test_page_carries_an_about_popup(tmp_path):
     assert "https://github.com/loosepin313/mkv-transcode" in page
     assert "<dt>Author</dt><dd>charris</dd>" in page
     assert "openAbout" in js and 'ev.key === "Escape"' in js
+
+
+def test_the_page_title_carries_the_hostname(tmp_path):
+    """The heading shows which box the page describes."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+        data = json.loads(fetch(port, "/api/snapshot")[1].decode("utf-8"))
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert '<h1 id="page-title">Transcode Monitor</h1>' in page
+    assert '"Transcode Monitor" + (host ? " (" + host + ")" : "")' in js
+    assert data["host"]
+
+
+def test_the_refresh_button_shows_that_it_ran(tmp_path):
+    """A manual refresh must look different, because the page reloads itself."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert '<button id="refresh" type="button">Refresh</button>' in page
+    assert "function refreshNow()" in js
+    assert 'addEventListener("click", refreshNow)' in js
+    assert "button.disabled = true" in js
+
+
+def test_the_page_holds_a_system_card_row(tmp_path):
+    """System numbers sit above the GPU cards."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert '<div class="cards system-cards" id="system-cards">' in page
+    assert page.index('id="system-cards"') < page.index('id="gpu-cards"')
+    assert "function renderSystem()" in js
+    assert "renderSystem();" in js
