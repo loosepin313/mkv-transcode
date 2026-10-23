@@ -28,6 +28,13 @@ Security and hardening.
 - `make uninstall` refuses to remove `/` or `/opt`.
 - Add `SECURITY.md` with a reporting channel and the trust model.
 
+Planned.
+
+- Cancel a running job from the status page. The work must stop ffmpeg, delete
+  the partial file under `workdir`, set the state row to `cancelled`, and leave
+  the source file in `incoming`.
+- Show the cancel reason and the time of the cancel in the job detail pane.
+
 ## 0.1.0
 
 First release.
