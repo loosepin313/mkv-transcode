@@ -21,6 +21,9 @@ whole suite.
 Add a test with every change. The suite covers the plan builder, the naming
 rules, the scanner, the IMDb index and the CLI.
 
+[docs/BUILD-SPEC.md](docs/BUILD-SPEC.md) lists the three gates a build must
+pass, and the acceptance checklist for a release.
+
 ## Style
 
 - Python 3.9 compatible. Do not use match statements or `X | None` in

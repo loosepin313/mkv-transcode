@@ -173,6 +173,7 @@ An NVIDIA GPU can do the encode instead of the CPU. Set an encoder such as
 - [docs/SYSTEMD.md](docs/SYSTEMD.md) — run the watcher as a service.
 - [docs/STATUS-WEB.md](docs/STATUS-WEB.md) — watch a run in a browser.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — modules and data flow.
+- [docs/BUILD-SPEC.md](docs/BUILD-SPEC.md) — build, install layout, and the verification gates.
 - [docs/CLI.md](docs/CLI.md) — command and flag reference.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures.
 - [SECURITY.md](SECURITY.md) — how to report a problem, and what the tool trusts.
