@@ -128,6 +128,7 @@ job with its percent, the queue, and the job history.
 mkv-transcode status-web                                # 127.0.0.1:8090
 mkv-transcode status-web --host 0.0.0.0 --port 8090     # reach it from your LAN
 mkv-transcode status-web --interval 2 --recent 200
+mkv-transcode status-web --allow-upload --allow-control # the page can write
 ```
 
 | Flag | Default | Purpose |
@@ -138,6 +139,7 @@ mkv-transcode status-web --interval 2 --recent 200
 | `--recent` | `80` | Jobs to keep in the list. |
 | `--allow-upload` | off | Let the page write files into `incoming`. |
 | `--max-upload-gb` | `60` | Largest upload in GiB. `0` means no cap. |
+| `--allow-control` | off | Let the page clear the job list and ask the watcher to start the queue now. |
 
 The page has no login. See [STATUS-WEB.md](STATUS-WEB.md).
 

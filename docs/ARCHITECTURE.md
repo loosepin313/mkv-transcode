@@ -17,6 +17,7 @@ src/mkvtranscode/
   transcode/runner.py   Run ffmpeg, report progress, check the output.
   pipeline.py         One job from probe to placed file.
   state.py            SQLite job history and seen-file bookkeeping.
+  control.py          Request file between the page and the watcher.
   nfo.py              Jellyfin NFO sidecar.
   doctor.py           Environment checks.
   log.py, util.py, errors.py
@@ -93,6 +94,29 @@ The inotify events `IN_CREATE`, `IN_MOVED_TO` and `IN_CLOSE_WRITE` add a file
 to the pending set. A full rescan runs every `watch.rescan_seconds`, so a
 missed event cannot lose a file.
 
+`scan.is_ready` takes a `force` flag. A forced pass drops signal 2 only. The
+size and mtime must still match the last look, and no process may hold the file
+open. A forced pass never starts a copy that is still running.
+
+## How the status page reaches the watcher
+
+The page and the watcher are separate processes. The page writes a small JSON
+request file, and the watcher reads it on every pass of its loop.
+
+`status/server.py` handles `POST /api/process-now` and calls
+`control.request_process_now`. That writes `<transcoded>/.control.json`.
+`Watcher._check_control` reads the file at the top of each loop pass.
+
+While the request is live, `Watcher._forcing()` is true. That lifts the
+`watch.min_size_mb` floor in `list_candidates` and in `Watcher._add`, and it
+passes `force=True` to `scan.is_ready` and to `Pipeline.process`.
+
+The request expires on its own, so a busy watcher cannot act on it an hour
+later. The name rules in `scan.acceptable` never change.
+
+The page also clears the job table through `State.clear_jobs`. That route
+refuses while a job runs, because the running job would lose its row.
+
 ## Idempotency
 
 The state file records each input path with a status. A `done` or `skipped`
@@ -126,6 +150,7 @@ every core.
   transcoded/
     Title (Year)/        The finished file and its .nfo.
     .state.sqlite        Jobs and seen files.
+    .control.json        Process now request. Lives for two minutes.
     .logs/<name>.log     Plan, command, progress, result.
     .logs/<name>.json    Machine readable report.
 ```

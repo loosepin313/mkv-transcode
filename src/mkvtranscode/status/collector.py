@@ -17,7 +17,7 @@ import time
 from typing import Dict, List, Optional
 from urllib.request import pathname2url
 
-from .. import __version__
+from .. import __version__, control
 from ..config import Config
 from ..scan import PARTIAL_SUFFIXES
 from ..state import DONE, FAILED, RUNNING, SKIPPED
@@ -456,6 +456,21 @@ def _upload_info(config: Config, allow_upload: bool, max_bytes: int) -> Dict:
     }
 
 
+def _control_info(config: Config, allow_control: bool) -> Dict:
+    """Describe the two buttons that change something.
+
+    The page shows a live process-now request, so the operator can see that
+    the watcher has the request before the first job starts.
+    """
+    request = control.read_request(config)
+    return {
+        "enabled": bool(allow_control),
+        "process_now": request if control.is_live(request) else None,
+        "request_ttl": control.REQUEST_TTL,
+        "request_file": control.request_path(config),
+    }
+
+
 def _workdir(config: Config) -> List[Dict]:
     """List partial output files, which show the size of a run in flight."""
     items = []
@@ -566,7 +581,8 @@ def _config_summary(config: Config) -> Dict:
 
 
 def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120,
-             allow_upload: bool = False, max_upload_bytes: int = 0) -> Dict:
+             allow_upload: bool = False, max_upload_bytes: int = 0,
+             allow_control: bool = False) -> Dict:
     """Build one JSON friendly snapshot of the whole pipeline."""
     now = time.time()
     path = state_path(config)
@@ -623,6 +639,7 @@ def snapshot(config: Config, recent_limit: int = 80, log_lines: int = 120,
         "queue": queue,
         "downloads": downloads,
         "upload": _upload_info(config, allow_upload, max_upload_bytes),
+        "control": _control_info(config, allow_control),
         "work": _workdir(config),
         "disk": _disk(config),
         "gpus": gpu_stats(config),

@@ -132,6 +132,19 @@ class State:
             rows = self.conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
         return {row["status"]: row["n"] for row in rows}
 
+    def clear_jobs(self) -> int:
+        """Delete every job row. Return how many rows went.
+
+        Finished files, logs, reports, and the seen table stay on disk. Only
+        the history in the state file goes, so the next scan sees the files in
+        incoming as new work.
+        """
+        with self._lock:
+            cursor = self.conn.execute("DELETE FROM jobs")
+            removed = cursor.rowcount
+            self.conn.commit()
+        return removed
+
     def is_finished(self, input_path: str, size: int = 0) -> bool:
         """Return True when a done or skipped job covers this file.
 

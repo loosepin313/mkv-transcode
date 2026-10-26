@@ -9,6 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from mkvtranscode import control
 from mkvtranscode.config import Config
 from mkvtranscode.state import DONE, FAILED, RUNNING, JobRecord, State
 from mkvtranscode.status.collector import imdb_search, job_detail, snapshot
@@ -220,9 +221,9 @@ def put(port, path, body):
         return exc.code, exc.read()
 
 
-def with_server(config, allow_upload=False, max_upload_bytes=0):
+def with_server(config, allow_upload=False, max_upload_bytes=0, allow_control=False):
     httpd = make_server(config, "127.0.0.1", 0, allow_upload=allow_upload,
-                        max_upload_bytes=max_upload_bytes)
+                        max_upload_bytes=max_upload_bytes, allow_control=allow_control)
     worker = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.1})
     worker.daemon = True
     worker.start()
@@ -334,6 +335,143 @@ def test_queue_says_why_a_file_is_ignored(tmp_path):
     assert reasons["_notes.mkv"] == "ignored name"
     assert reasons["clip.avi"] == "wrong extension"
     assert snapshot(config)["queue"][0]["min_size_bytes"] == 50 * 1024 * 1024
+
+
+# ---- control routes ------------------------------------------------------
+
+
+def test_control_routes_are_off_by_default(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/process-now", b"")
+        assert code == 403 and b"--allow-control" in body
+        assert post(port, "/api/clear-jobs", b"")[0] == 403
+        assert snapshot(config)["control"]["enabled"] is False
+        assert control.read_request(config) is None
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_process_now_writes_a_request_the_watcher_reads(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config, allow_control=True)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/process-now", b"")
+        assert code == 200
+        assert json.loads(body.decode("utf-8"))["action"] == control.PROCESS_NOW
+        request = control.read_request(config)
+        assert request and control.is_live(request)
+        assert os.stat(control.request_path(config)).st_mode & 0o777 == 0o600
+        # The page shows the live request, so the operator sees that the
+        # watcher has it before the first job starts.
+        snap = snapshot(config, allow_control=True)
+        assert snap["control"]["enabled"] is True
+        assert snap["control"]["process_now"]["expires"] == request["expires"]
+        # A control route takes no body, so a PUT must not reach it.
+        assert put(port, "/api/process-now", b"x")[0] == 405
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+
+def test_an_expired_request_leaves_the_snapshot(tmp_path):
+    config = make_config(tmp_path)
+    control.request_process_now(config, ttl=-5)
+    assert snapshot(config, allow_control=True)["control"]["process_now"] is None
+
+
+def test_clear_jobs_removes_the_history(tmp_path):
+    config = make_config(tmp_path)
+    seed(config)
+    # The seed leaves one running job. Finish it, so the route accepts the clear.
+    path = os.path.join(config.paths.transcoded, ".state.sqlite")
+    state = State(path)
+    state.conn.execute("UPDATE jobs SET status = ? WHERE status = ?", (DONE, RUNNING))
+    state.conn.commit()
+    state.close()
+
+    httpd, worker = with_server(config, allow_control=True)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/clear-jobs", b"")
+        assert code == 200
+        assert json.loads(body.decode("utf-8"))["removed"] == 3
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+
+    data = snapshot(config)
+    assert data["counts"] == {}
+    assert data["downloads"] == []
+    # The log, the report, and the finished file on disk all stay.
+    assert os.path.isfile(os.path.join(config.paths.logs, "A.mkv.log"))
+    assert os.path.isfile(os.path.join(config.paths.transcoded, "B (2019)", "B (2019).mkv"))
+
+
+def test_clear_jobs_refuses_while_a_job_runs(tmp_path):
+    """A running job would lose its row, so the route waits for it."""
+    config = make_config(tmp_path)
+    seed(config)
+    httpd, worker = with_server(config, allow_control=True)
+    port = httpd.server_address[1]
+    try:
+        assert post(port, "/api/clear-jobs", b"")[0] == 409
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert snapshot(config)["counts"][RUNNING] == 1
+
+
+def test_clear_jobs_on_a_missing_state_file(tmp_path):
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config, allow_control=True)
+    port = httpd.server_address[1]
+    try:
+        code, body = post(port, "/api/clear-jobs", b"")
+        assert code == 200 and json.loads(body.decode("utf-8"))["removed"] == 0
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert not os.path.isfile(os.path.join(config.paths.transcoded, ".state.sqlite"))
+
+
+def test_the_page_holds_the_two_control_buttons(tmp_path):
+    """Process now sits with the queue, Clear jobs with the job list."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        page = fetch(port, "/")[1].decode("utf-8")
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+        css = fetch(port, "/app.css")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert '<button id="process-now"' in page and "Process now</button>" in page
+    assert '<button id="clear-jobs" class="danger"' in page
+    assert page.index('id="process-now"') < page.index('<h2>Jobs</h2>')
+    assert page.index('<h2>Jobs</h2>') < page.index('id="clear-jobs"')
+    assert 'id="control-note"' in page and 'id="jobs-note"' in page
+    assert '<div id="confirm" class="modal" hidden>' in page
+    assert 'id="confirm-yes" class="danger"' in page
+    assert "function renderControl()" in js and "renderControl();" in js
+    assert "function processNow()" in js and "function clearJobs()" in js
+    assert "A request does nothing until the watcher runs." in js
+    assert '"/api/process-now"' in js and '"/api/clear-jobs"' in js
+    assert ".danger{color:var(--st-danger-text)}" in css
+    assert ".panel-note{" in css
 
 
 def test_page_orders_the_sections_for_an_operator(tmp_path):

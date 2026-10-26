@@ -20,10 +20,12 @@ ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --i
 #   [Service]
 #   ExecStart=
 #   ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5 --allow-upload
+# The two control buttons need the same treatment, plus write access to the
+# library folder. See systemd/drop-ins/status-control.conf.
 Restart=on-failure
 RestartSec=15
 
-# The page only reads files, so it needs no write access at all.
+# The page reads files, and writes only where a flag turns a route on.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

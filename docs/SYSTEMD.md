@@ -143,7 +143,9 @@ journalctl -u mkv-transcode-status -f
 ```
 
 The page has no login. The unit binds to `0.0.0.0`, so keep that port inside
-your local network. See [STATUS-WEB.md](STATUS-WEB.md).
+your local network. The two control buttons stay off until you pass
+`--allow-control`. See [STATUS-WEB.md](STATUS-WEB.md) and
+`systemd/drop-ins/status-control.conf`.
 
 ## Stop, pause and resume
 

@@ -88,13 +88,20 @@
 </section>
 
 <section class="panel">
-  <div class="panel-bar"><h2>Incoming queue</h2><span id="queue-note" class="small"></span></div>
+  <div class="panel-bar">
+    <h2>Incoming queue</h2>
+    <div class="filters">
+      <span id="queue-note" class="small"></span>
+      <button id="process-now" type="button" disabled title="Start every queued file now, without the stability wait">Process now</button>
+    </div>
+  </div>
   <div class="table-wrap">
     <table>
       <thead><tr><th>File</th><th class="num">Size</th><th class="num">Age</th><th>State</th></tr></thead>
       <tbody id="queue"></tbody>
     </table>
   </div>
+  <div id="control-note" class="panel-note small"></div>
 </section>
 
 <section class="panel">
@@ -109,6 +116,7 @@
         <option value="failed">Failed</option>
         <option value="skipped">Skipped</option>
       </select>
+      <button id="clear-jobs" class="danger" type="button" disabled title="Forget every job in the state file">Clear jobs</button>
     </div>
   </div>
   <div class="workspace">
@@ -142,13 +150,27 @@
       </div>
     </div>
   </div>
+  <div id="jobs-note" class="panel-note small"></div>
 </section>
 
 <footer>
-  <span id="foot-left">The page reads the state file and the job logs. It changes nothing.</span>
+  <span id="foot-left">The page reads the state file and the job logs. A button that changes something stays off until you pass --allow-control.</span>
   <span id="updated">Connecting…</span>
 </footer>
 </main>
+
+<div id="confirm" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="panel-bar"><h2 id="confirm-title">Clear the job list?</h2><button id="confirm-cancel" type="button">Keep</button></div>
+    <div class="modal-body">
+      <p id="confirm-body">This removes every job row from the state file. The
+      videos, the job logs, and the reports stay on disk. Files still in
+      <code>incoming</code> become new work, so the watcher encodes them
+      again.</p>
+      <div class="controls"><button id="confirm-yes" class="danger" type="button">Clear jobs</button></div>
+    </div>
+  </div>
+</div>
 
 <div id="about" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="about-title">
@@ -160,8 +182,9 @@
       drops to one quarter of the original size.</p>
       <p>This page shows the watcher state, the job in progress, the queue, and
       the job history. It reads the state file, the job logs, and the JSON
-      reports. It changes nothing, except uploaded files when you turn uploads
-      on.</p>
+      reports. It writes only where you turn a write route on: uploads with
+      <code>--allow-upload</code>, and the two control buttons with
+      <code>--allow-control</code>.</p>
       <dl class="facts">
         <dt>Version</dt><dd id="about-version">&mdash;</dd>
         <dt>Author</dt><dd>charris</dd>

@@ -1,8 +1,9 @@
 """Serve the status page and its JSON snapshot.
 
 The page has no login. Bind it to 127.0.0.1, or to an address on your local
-network, and keep it off the public internet. The server only reads files and
-serves them. It writes nothing.
+network, and keep it off the public internet. The server reads files and
+serves them. It writes only where you turn a write route on: uploads with
+`--allow-upload`, and the two control actions with `--allow-control`.
 """
 
 from __future__ import annotations
@@ -10,14 +11,17 @@ from __future__ import annotations
 import json
 import os
 import signal
+import sqlite3
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict
 from urllib.parse import unquote
 
+from .. import control
 from ..log import get_logger
+from ..state import RUNNING, State
 from ..util import free_bytes
-from .collector import imdb_search, job_detail, safe_under, snapshot
+from .collector import imdb_search, job_detail, safe_under, snapshot, state_path
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
@@ -57,6 +61,7 @@ class Handler(BaseHTTPRequestHandler):
     recent = 80
     allow_upload = False
     max_upload_bytes = 0
+    allow_control = False
 
     # ---- helpers -------------------------------------------------------
 
@@ -146,7 +151,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = snapshot(self.config, recent_limit=self.recent,
                                 allow_upload=self.allow_upload,
-                                max_upload_bytes=self.max_upload_bytes)
+                                max_upload_bytes=self.max_upload_bytes,
+                                allow_control=self.allow_control)
                 data["interval"] = self.interval
             except Exception as exc:                     # keep the page alive
                 log.warning("snapshot failed: %s", exc)
@@ -201,7 +207,75 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         """curl -T sends PUT, so accept the same body here."""
+        if self.path.split("?", 1)[0] != "/api/upload":
+            self._fail(405, "only /api/upload takes a body")
+            return
         self.do_POST()
+
+    # ---- control actions ------------------------------------------------
+
+    def _control_enabled(self) -> bool:
+        """Return True when the control routes are on. Otherwise answer 403."""
+        if self.allow_control:
+            return True
+        self._fail(403, "controls are off. Start the server with --allow-control.")
+        return False
+
+    def _json(self, payload: Dict, code: int = 200) -> None:
+        """Send one JSON body."""
+        self._send(code, json.dumps(payload, sort_keys=True).encode("utf-8"),
+                   CONTENT_TYPES[".json"])
+
+    def handle_process_now(self) -> None:
+        """Write a request that tells the watcher to start the queue now.
+
+        The server does not run an encode itself. One process owns the GPU
+        pool and the running-job count, and that process is the watcher.
+        """
+        if not self._control_enabled():
+            return
+        payload = control.request_process_now(self.config)
+        log.info("process now requested by %s", self.address_string())
+        self._json({
+            "ok": True,
+            "action": payload["action"],
+            "requested": payload["requested"],
+            "expires": payload["expires"],
+            "request_file": control.request_path(self.config),
+        })
+
+    def handle_clear_jobs(self) -> None:
+        """Delete the job rows, so the next scan sees incoming as new work.
+
+        A running job would lose its row when it finished, so the route
+        refuses while one runs. The route touches no video, log, or report file.
+        """
+        if not self._control_enabled():
+            return
+        path = state_path(self.config)
+        if not os.path.isfile(path):
+            self._json({"ok": True, "removed": 0, "state_file": path})
+            return
+        try:
+            state = State(path)
+        except sqlite3.Error as exc:
+            log.warning("cannot open the state file for writing: %s", exc)
+            self._fail(500, "the server cannot write %s. Run it with write access "
+                            "to the library folder." % path)
+            return
+        try:
+            if state.counts().get(RUNNING, 0):
+                self._fail(409, "a job runs. Clear the list after it stops.")
+                return
+            removed = state.clear_jobs()
+        except sqlite3.Error as exc:
+            log.warning("clear jobs failed: %s", exc)
+            self._fail(500, "the server could not clear the job list: %s" % exc)
+            return
+        finally:
+            state.close()
+        log.info("job list cleared by %s: %d row(s)", self.address_string(), removed)
+        self._json({"ok": True, "removed": removed, "state_file": path})
 
     # ---- upload --------------------------------------------------------
 
@@ -220,8 +294,14 @@ class Handler(BaseHTTPRequestHandler):
         return True, ""
 
     def do_POST(self) -> None:
-        """Accept one raw file body into the incoming folder."""
+        """Route one POST: an upload body, or one control action."""
         path = self.path.split("?", 1)[0]
+        if path == "/api/process-now":
+            self.handle_process_now()
+            return
+        if path == "/api/clear-jobs":
+            self.handle_clear_jobs()
+            return
         if path != "/api/upload":
             self._fail(404, "not found")
             return
@@ -305,11 +385,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def make_server(config, host: str, port: int, interval: float = 5.0, recent: int = 80,
-                allow_upload: bool = False, max_upload_bytes: int = 0):
+                allow_upload: bool = False, max_upload_bytes: int = 0,
+                allow_control: bool = False):
     """Build the HTTP server without starting it."""
     handler = type("BoundHandler", (Handler,), {
         "config": config, "interval": interval, "recent": recent,
         "allow_upload": allow_upload, "max_upload_bytes": max_upload_bytes,
+        "allow_control": allow_control,
     })
     httpd = ThreadingHTTPServer((host, port), handler)
     httpd.daemon_threads = True
@@ -317,11 +399,12 @@ def make_server(config, host: str, port: int, interval: float = 5.0, recent: int
 
 
 def serve(config, host: str = "127.0.0.1", port: int = 8090, interval: float = 5.0,
-          recent: int = 80, allow_upload: bool = False, max_upload_bytes: int = 0) -> int:
+          recent: int = 80, allow_upload: bool = False, max_upload_bytes: int = 0,
+          allow_control: bool = False) -> int:
     """Run the status server until SIGTERM or SIGINT arrives."""
     try:
         httpd = make_server(config, host, port, interval, recent, allow_upload,
-                            max_upload_bytes)
+                            max_upload_bytes, allow_control)
     except OSError as exc:
         print("cannot listen on %s:%d: %s" % (host, port, exc))
         return 1
@@ -342,6 +425,9 @@ def serve(config, host: str = "127.0.0.1", port: int = 8090, interval: float = 5
         print("uploads are on: %s into %s (max %s)"
               % (", ".join("." + e for e in config.watch.extensions),
                  config.paths.incoming, limit))
+    if allow_control:
+        print("controls are on: clear the job list, and ask the watcher to start "
+              "the queue now")
     try:
         httpd.serve_forever(poll_interval=0.4)
     finally:

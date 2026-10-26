@@ -24,6 +24,10 @@ mkv-transcode --log-level debug once
 
 The debug log prints why a file is not ready.
 
+The status page has a Process now button for the same folder. It lifts step 3
+and step 4, and it needs `--allow-control`. Steps 1, 2, 5 and 6 still apply.
+See [STATUS-WEB.md](STATUS-WEB.md).
+
 ## ffmpeg: encoder not found
 
 ```

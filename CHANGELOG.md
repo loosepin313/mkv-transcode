@@ -30,7 +30,7 @@ Status web page.
 - `mkv-transcode status-web` serves a live status page. It shows the watcher
   state, the running job with its percent, the queue, and the job history.
 - The page reads the state file, the job logs and the reports. It opens the
-  state file read only and writes nothing.
+  state file read only, and writes only where a flag turns a route on.
 - `mkv-transcode-status.service` runs the page. `BindsTo` ties it to the
   watcher, so a stopped watcher stops the page too.
 - The page now has an upload form and a download list. Uploads write into
@@ -38,6 +38,14 @@ Status web page.
   exists for every finished output and its `.nfo`.
 - The queue table now shows why the watcher skips a queued file, such as
   `below min_size_mb` or `ignored name`.
+- Two buttons change something. Both stay off until you pass
+  `--allow-control`.
+- `Process now` writes `<transcoded>/.control.json`. The watcher reads that
+  file on its next pass and starts every queued file. It skips the
+  `watch.stable_seconds` wait, and it lifts the `watch.min_size_mb` floor. The
+  name rules still apply. A request lives for two minutes.
+- `Clear jobs` removes every row from the `jobs` table. Logs, reports, and
+  finished files stay on disk. The button stays off while a job runs.
 
 Security and hardening.
 

@@ -29,11 +29,18 @@ class Candidate:
     observed_at: float = field(default_factory=time.time)
 
 
-def list_candidates(config: Config, now: Optional[float] = None) -> List[Candidate]:
-    """Return every input file that is ready to process, oldest first."""
+def list_candidates(config: Config, now: Optional[float] = None,
+                    min_size_bytes: Optional[int] = None) -> List[Candidate]:
+    """Return every input file that is ready to process, oldest first.
+
+    min_size_bytes replaces the watch.min_size_mb floor. The watcher passes 0
+    for one forced pass, when an operator asked to start now.
+    """
     root = config.paths.incoming
     if not os.path.isdir(root):
         return []
+    floor = (int(config.watch.min_size_mb * 1024 * 1024)
+             if min_size_bytes is None else int(min_size_bytes))
     out: List[Candidate] = []
     for path in _walk(root, config.watch.follow_subdirs):
         if not acceptable(path, config):
@@ -49,7 +56,7 @@ def list_candidates(config: Config, now: Optional[float] = None) -> List[Candida
             continue
         if not stat.S_ISREG(info.st_mode):
             continue
-        if info.st_size < int(config.watch.min_size_mb * 1024 * 1024):
+        if info.st_size < floor:
             continue
         out.append(Candidate(path=path, size=info.st_size, mtime=info.st_mtime))
     out.sort(key=lambda item: (item.mtime, item.path))
@@ -105,13 +112,18 @@ def _walk(root: str, follow_subdirs: bool):
         log.warning("cannot read %s: %s", root, exc)
 
 
-def is_ready(path: str, config: Config, previous: Optional[Candidate] = None) -> bool:
+def is_ready(path: str, config: Config, previous: Optional[Candidate] = None,
+             force: bool = False) -> bool:
     """True when the file looks complete.
 
     Three signals decide this:
     1. The size and mtime did not change since the previous scan.
     2. That unchanged state has lasted watch.stable_seconds.
     3. No other process holds the file open.
+
+    force drops signal 2 only, when an operator asked to start now. Signals 1
+    and 3 stay, so a file that is still copying, or still open in another
+    process, never starts a job.
     """
     try:
         stat = os.stat(path)
@@ -119,11 +131,12 @@ def is_ready(path: str, config: Config, previous: Optional[Candidate] = None) ->
         return False
     if previous is not None and (previous.size != stat.st_size or previous.mtime != stat.st_mtime):
         return False
-    if previous is not None:
-        if time.time() - previous.observed_at < config.watch.stable_seconds:
+    if not force:
+        if previous is not None:
+            if time.time() - previous.observed_at < config.watch.stable_seconds:
+                return False
+        elif time.time() - stat.st_mtime < config.watch.stable_seconds:
             return False
-    elif time.time() - stat.st_mtime < config.watch.stable_seconds:
-        return False
     if config.watch.check_open_files:
         holder = open_by(path)
         if holder:

@@ -14,6 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
+from . import control
 from .config import Config
 from .log import get_logger
 from .metadata import build_provider
@@ -41,6 +42,9 @@ class Watcher:
         self.failures = 0
         self.stop_requested = False
         self.last_rescan = 0.0
+        # A process-now request from the status page lifts the stability wait
+        # and the size floor until the request expires.
+        self.force_until = 0.0
         self.gpu_pool = GpuPool(config.gpu.devices) if config.gpu.devices else None
         self._gpu_by_path: Dict[str, Optional[List[int]]] = {}
 
@@ -92,6 +96,7 @@ class Watcher:
             deadline = time.time() + allowed
         try:
             while not self.stop_requested:
+                self._check_control()
                 self._refresh_pending()
                 self._service_ready(dry_run)
                 if once:
@@ -140,10 +145,39 @@ class Watcher:
         self.last_rescan = now
         self._refresh_pending()
 
+    # ---- requests from the status page ---------------------------------
+
+    def _check_control(self) -> None:
+        """Take a process-now request written by the status page.
+
+        The request stays on disk until it expires, so the page can show that
+        the watcher has it. A request that arrived after it expired is gone.
+        """
+        request = control.read_request(self.config)
+        if request is None:
+            return
+        if not control.is_live(request):
+            control.clear_request(self.config)
+            return
+        expires = float(request.get("expires") or 0.0)
+        if expires > self.force_until:
+            self.force_until = expires
+            log.info("process now requested: the watcher skips the stability wait")
+
+    def _forcing(self) -> bool:
+        """True while a process-now request is live."""
+        return time.time() < self.force_until
+
+    def _floor_bytes(self) -> int:
+        """Return the size floor for this pass. A forced pass has none."""
+        if self._forcing():
+            return 0
+        return int(self.config.watch.min_size_mb * 1024 * 1024)
+
     # ---- pending set ---------------------------------------------------
 
     def _refresh_pending(self) -> None:
-        for candidate in list_candidates(self.config):
+        for candidate in list_candidates(self.config, min_size_bytes=self._floor_bytes()):
             if candidate.path in self.finished or self.state.is_finished(candidate.path, candidate.size):
                 continue
             self._add(candidate.path, candidate)
@@ -167,7 +201,7 @@ class Watcher:
         except OSError:
             return
         entry = candidate or Candidate(path=path, size=stat.st_size, mtime=stat.st_mtime)
-        if entry.size < self.config.watch.min_size_mb * 1024 * 1024:
+        if entry.size < self._floor_bytes():
             return
         self.pending[path] = entry
         self.state.note_seen(path, entry.size, entry.mtime)
@@ -183,7 +217,8 @@ class Watcher:
             candidate = self.pending.get(path)
             if candidate is None:
                 continue
-            if not is_ready(path, self.config, previous=candidate):
+            if not is_ready(path, self.config, previous=candidate,
+                            force=self._forcing()):
                 # Reset the stability timer only when the file changed.
                 try:
                     stat = os.stat(path)
@@ -236,9 +271,14 @@ class Watcher:
         future.add_done_callback(self._on_future)
 
     def _run_job(self, path: str, dry_run: bool, devices: Optional[List[int]]) -> Outcome:
-        """Run one job, then give its GPUs back to the pool."""
+        """Run one job, then give its GPUs back to the pool.
+
+        force lifts the size floor in the pipeline. The watcher never queues a
+        file the state file already finished, so force cannot re-open one.
+        """
         try:
-            return self.pipeline.process(path, dry_run=dry_run, devices=devices)
+            return self.pipeline.process(path, dry_run=dry_run, devices=devices,
+                                         force=self._forcing())
         finally:
             self._release_gpu(path)
 

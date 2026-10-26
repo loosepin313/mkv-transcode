@@ -49,6 +49,24 @@ def test_a_name_with_a_wildcard_still_matches(tmp_path):
     state.close()
 
 
+def test_clear_jobs_removes_every_row(tmp_path):
+    """The Clear jobs button empties the history, and nothing else."""
+    state = make_state(tmp_path)
+    state.start_job(record("/in/A.mkv", "running"))
+    state.start_job(record("/in/B.mkv", "running"))
+    state.finish_job(record("/in/B.mkv", DONE))
+    state.note_seen("/in/C.mkv", 10, 0.0)
+
+    assert state.clear_jobs() == 2
+    assert state.counts() == {}
+    assert state.recent_jobs() == []
+    assert state.is_finished("/in/B.mkv") is False
+    # The seen table keeps its rows, so the queue keeps its stability history.
+    row = state.conn.execute("SELECT COUNT(*) AS n FROM seen").fetchone()
+    assert row["n"] == 1
+    state.close()
+
+
 def test_several_threads_share_one_state_store(tmp_path):
     """The watcher runs jobs on threads, so State must be thread safe."""
     import threading

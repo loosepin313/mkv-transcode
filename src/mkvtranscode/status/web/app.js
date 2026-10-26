@@ -3,7 +3,8 @@
 // inject markup.
 
 const $ = (id) => document.getElementById(id);
-const state = { snap: { recent: [], queue: [] }, selected: null, pane: "plan", detail: null, timer: null, ms: 5000 };
+const state = { snap: { recent: [], queue: [] }, selected: null, pane: "plan", detail: null, timer: null, ms: 5000,
+  busy: { process: false, clear: false }, note: { control: "", jobs: "" } };
 
 // ---- format helpers ----------------------------------------------------
 
@@ -570,6 +571,119 @@ function startUpload() {
   xhr.send(file);
 }
 
+// ---- control buttons ---------------------------------------------------
+// Both actions need --allow-control on the server. The page sends one POST
+// and shows the answer in the note under the panel it belongs to.
+
+function postJSON(path) {
+  return fetch(path, { method: "POST" })
+    .then((r) => r.text().then((text) => {
+      let data = {};
+      try { data = JSON.parse(text); } catch (e) { data = {}; }
+      return { status: r.status, data: data, text: text.trim() };
+    }));
+}
+
+function failure(result) {
+  return result.text || ("the server answered " + result.status);
+}
+
+function controlHint(ctl, request, service) {
+  if (!ctl.enabled) return "Controls are off. Add --allow-control to the status service to use this button.";
+  if (request) return "Process now is active for " + dur((request.expires * 1000 - Date.now()) / 1000)
+    + ". The watcher takes the request on its next pass.";
+  // 'unknown' is normal without systemd, so only a definite stop warns.
+  if (service && service !== "active" && service !== "unknown")
+    return "The watcher card says " + service + ". A request does nothing until the watcher runs.";
+  return "Process now starts every queued file at once. It skips the stability wait and the min_size_mb floor. Names such as sample.mkv stay ignored.";
+}
+
+function jobsHint(ctl, running) {
+  if (!ctl.enabled) return "Clear jobs is off. Add --allow-control to the status service.";
+  if (running) return "Clear jobs stays off while a job runs.";
+  return "";
+}
+
+function renderControl() {
+  const s = state.snap || {};
+  const ctl = s.control || {};
+  const request = ctl.process_now || null;
+  const running = (s.running || []).length;
+  const process = $("process-now");
+  const clear = $("clear-jobs");
+
+  process.disabled = !ctl.enabled || state.busy.process;
+  process.textContent = state.busy.process ? "Requested\u2026" : "Process now";
+  process.title = ctl.enabled
+    ? "Start every queued file now, without the stability wait"
+    : "Controls are off. Start the status service with --allow-control.";
+
+  clear.disabled = !ctl.enabled || state.busy.clear || running > 0;
+  clear.textContent = state.busy.clear ? "Clearing\u2026" : "Clear jobs";
+  clear.title = !ctl.enabled
+    ? "Controls are off. Start the status service with --allow-control."
+    : (running ? "A job runs. Clear the list after it stops." : "Forget every job in the state file");
+
+  setText("control-note", state.note.control || controlHint(ctl, request, s.service || ""));
+  setText("jobs-note", state.note.jobs || jobsHint(ctl, running));
+}
+
+function processNow() {
+  if (state.busy.process) return;
+  state.busy.process = true;
+  state.note.jobs = "";
+  state.note.control = "";
+  load().then(() => postJSON("/api/process-now")).then((result) => {
+    state.busy.process = false;
+    // A live request shows its own countdown in the note, so a success needs
+    // no text of its own.
+    state.note.control = result.status === 200 ? "" : failure(result);
+    load();
+  }, () => {
+    state.busy.process = false;
+    state.note.control = "The request did not reach the server.";
+    load();
+  });
+}
+
+function clearJobs() {
+  closeConfirm();
+  if (state.busy.clear) return;
+  state.busy.clear = true;
+  state.note.control = "";
+  state.note.jobs = "";
+  load().then(() => postJSON("/api/clear-jobs")).then((result) => {
+    state.busy.clear = false;
+    if (result.status !== 200) {
+      state.note.jobs = failure(result);
+      load();
+      return;
+    }
+    const removed = result.data.removed || 0;
+    state.note.jobs = "Cleared " + removed + " job row(s). Files still in incoming are new work again.";
+    state.selected = null;
+    $("selection").hidden = true;
+    $("no-selection").hidden = false;
+    load();
+  }, () => {
+    state.busy.clear = false;
+    state.note.jobs = "The request did not reach the server.";
+    load();
+  });
+}
+
+function openConfirm() {
+  if ($("clear-jobs").disabled) return;
+  $("confirm").hidden = false;
+  $("confirm-cancel").focus();
+}
+
+function closeConfirm() {
+  if ($("confirm").hidden) return;
+  $("confirm").hidden = true;
+  $("clear-jobs").focus();
+}
+
 // ---- polling -----------------------------------------------------------
 
 function current() {
@@ -583,6 +697,7 @@ function render() {
   renderGpus();
   renderJobs();
   renderQueue();
+  renderControl();
   renderTransfer();
   const job = current();
   if (job) renderDetail(job);
@@ -678,7 +793,18 @@ $("about").addEventListener("click", (ev) => {
   if (ev.target.id === "about") closeAbout();
 });
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && !$("about").hidden) closeAbout();
+  if (ev.key === "Escape") {
+    if (!$("confirm").hidden) closeConfirm();
+    else if (!$("about").hidden) closeAbout();
+  }
+});
+
+$("process-now").addEventListener("click", processNow);
+$("clear-jobs").addEventListener("click", openConfirm);
+$("confirm-yes").addEventListener("click", clearJobs);
+$("confirm-cancel").addEventListener("click", closeConfirm);
+$("confirm").addEventListener("click", (ev) => {
+  if (ev.target.id === "confirm") closeConfirm();
 });
 
 $("send").addEventListener("click", startUpload);

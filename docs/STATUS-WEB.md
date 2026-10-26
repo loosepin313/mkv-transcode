@@ -1,8 +1,9 @@
 # Status web page
 
 `mkv-transcode status-web` serves one page that shows what the watcher is
-doing right now. It reads the same files the watcher writes. It changes
-nothing, except for uploaded files when you turn uploads on.
+doing right now. It reads the same files the watcher writes. It writes only
+where you turn a write route on: uploads with `--allow-upload`, and the two
+control buttons with `--allow-control`.
 
 ## What the page shows
 
@@ -20,7 +21,9 @@ nothing, except for uploaded files when you turn uploads on.
 | IMDb search box | Search the local IMDb index while you upload, then use the hit as the file name. |
 | Downloads | Every finished output and its `.nfo`, with a download link. |
 | Incoming queue | Files in `incoming`, with size, age, and the reason the watcher skips them. The box shows about four rows and scrolls when more files wait. |
+| Process now button | Asks the watcher to start every queued file on its next pass. Off by default. See Buttons that change things. |
 | Job list | Every job in the state file. Search by title, file name or IMDb id. Filter by status. |
+| Clear jobs button | Removes every job row from the state file. Off by default. See Buttons that change things. |
 | Job detail | Source size, output size, space saved, encode time, started, elapsed, time left, and the profile. Tabs show the ffmpeg plan, the last 400 log lines, and the JSON report. |
 
 The page refreshes every five seconds. Change that with `--interval`.
@@ -123,6 +126,64 @@ The search reads the `norm_primary` index as a range. A hit comes back in a few
 milliseconds on a 2.5 million title index. It ranks only the first 500 prefix
 hits, which keeps the sort cheap.
 
+## Buttons that change things
+
+Two buttons change something. Both stay off until you pass `--allow-control`:
+
+```bash
+mkv-transcode status-web --allow-control
+```
+
+For the service, add a drop-in:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/usr/local/bin/mkv-transcode status-web --host 0.0.0.0 --port 8090 --interval 5 --allow-control
+```
+
+The shipped unit runs with `ProtectSystem=full`, so the page cannot write to
+the library folder. `--allow-control` needs a `ReadWritePaths` drop-in for
+`paths.transcoded`. Without it the two routes answer 500.
+
+### Process now
+
+The button writes a request file: `<transcoded>/.control.json`. The watcher
+reads that file on every pass of its loop. The encode stays in the one process
+that owns the GPUs and the job count. The status server never starts an encode
+itself.
+
+While a request is live, the watcher:
+
+- starts a queued file as soon as its size and mtime stop changing. It does not
+  wait `watch.stable_seconds`.
+- ignores the `watch.min_size_mb` floor, so a small file runs too.
+- still refuses the names it always refuses. Hidden names, `_` names, `sample`
+  names, partial suffixes such as `.part`, wrong extensions, and symbolic links
+  all stay out.
+- still refuses a file another process holds open, unless you set
+  `watch.check_open_files = false`.
+
+A request lives for two minutes. The page shows the time left, so you can see
+that the watcher has it. The watcher drops a request nobody took when it
+expires, so an old request cannot start an encode an hour later. A file the
+state file already marks `done` or `skipped` never runs again. Process now does
+not re-encode a finished film. Clear the job list first if you want that.
+
+### Clear jobs
+
+The button removes every row from the `jobs` table in
+`<transcoded>/.state.sqlite`. The page asks once before it sends the request.
+
+- Videos, `.nfo` files, job logs, and JSON reports stay on disk.
+- The Downloads list and the totals go empty, because both read the job table.
+- The `seen` table stays, so the queue keeps its stability history.
+- Files still in `incoming` become new work, so the watcher encodes them again.
+- The button stays off while a job runs, because that job would lose its row.
+
+To do the same from the shell, stop the watcher and delete
+`<transcoded>/.state.sqlite`.
+
 ## Why a queued file never starts
 
 The queue table shows the reason. The watcher skips a file when:
@@ -146,8 +207,9 @@ min_size_mb = 1.0
 The page has no login and no tokens. The shipped unit binds to `0.0.0.0`, so
 any host on your local network can read the job list and the job logs. With
 `--allow-upload`, any host on your local network can also write files into
-`incoming`. Keep the port off the public internet, or bind to `127.0.0.1` and
-use a tunnel:
+`incoming`. With `--allow-control`, any host on your local network can also
+clear the job list and start an encode. Keep the port off the public internet,
+or bind to `127.0.0.1` and use a tunnel:
 
 ```bash
 ssh -L 8090:127.0.0.1:8090 <host>
@@ -169,15 +231,24 @@ first.
 
 | Source | Use |
 |--------|-----|
-| `<transcoded>/.state.sqlite` | Job rows, counts, and the `seen` table. Opened read only. |
+| `<transcoded>/.state.sqlite` | Job rows, counts, and the `seen` table. Opened read only, except on a Clear jobs request. |
 | `<logs>/<name>.log` | Plan lines, progress percent, and notes for one job. |
 | `<logs>/<name>.json` | The report for one job. |
 | `incoming/` | The queue list, and the target folder for uploads. |
 | `workdir/` | Partial output size. |
 | `<imdb_data>/imdb.sqlite` | The IMDb search box. Opened read only. |
+| `<transcoded>/.control.json` | The Process now request that is pending. Read only. |
 | `systemctl is-active mkv-transcode.service` | The watcher card. |
 | `nvidia-smi --query-gpu=...` | The GPU cards. Cached for two seconds. Off with `gpu.stats = false`. |
 | `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo`, `/sys/class/hwmon` | The system cards. A virtual machine often has no temperature sensor, so that card stays out. |
+
+### What the server writes
+
+| Target | When |
+|--------|------|
+| `<incoming>/<name>` | An upload. Needs `--allow-upload`. |
+| `<transcoded>/.control.json` | A Process now request. Needs `--allow-control`. Mode `0600`. |
+| `<transcoded>/.state.sqlite` | The `jobs` table, after a Clear jobs click. Needs `--allow-control`. |
 
 ## Troubleshooting
 
@@ -192,3 +263,7 @@ first.
 | The CPU card shows a dash | The page needs two samples to work out CPU use. The dash clears on the next refresh. |
 | No temperature card | The box exposes no sensor. A virtual machine usually shows none. |
 | A blank page after an upgrade | The web files are missing from the install. Re-run `scripts/install.sh`. |
+| Process now does nothing | The watcher does not run, or it has no free slot. The note under the queue shows the time left on the request. |
+| A control route answers 403 | You did not pass `--allow-control`. |
+| A control route answers 500 | The page cannot write to `paths.transcoded`. Add a `ReadWritePaths` drop-in, or run the page as a user who owns the library. |
+| Clear jobs answers 409 | A job runs. Clear the list after it stops. |

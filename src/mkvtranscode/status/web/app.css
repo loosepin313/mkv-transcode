@@ -112,9 +112,15 @@ main.flash{animation:flash .6s ease-out}
 /* panel and filters */
 .panel{border:1px solid var(--st-line);border-radius:14px;background:var(--st-surface);overflow:hidden;margin-bottom:18px}
 .panel-bar{padding:15px 20px;border-bottom:1px solid var(--st-line);display:flex;align-items:center;justify-content:space-between;gap:12px}
-.filters{display:flex;gap:8px}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* one line under a table, for the result of a button press */
+.panel-note{padding:10px 20px;border-top:1px solid var(--st-line-soft);background:var(--st-surface-2)}
 input,select{color:inherit;border:1px solid var(--st-line);background:var(--st-bg);padding:7px 10px;border-radius:8px}
 #search{width:190px}
+/* a button that removes something reads as different from the rest */
+.danger{color:var(--st-danger-text)}
+.danger:hover{border-color:var(--st-danger);background:var(--st-danger-tint)}
+#process-now,#clear-jobs{font-size:13px;padding:7px 11px;white-space:nowrap}
 
 /* imdb search inside the upload panel */
 .results{margin:8px 0 12px;max-height:150px;overflow:auto}

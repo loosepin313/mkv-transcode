@@ -108,6 +108,97 @@ def test_max_parallel_one_processes_inline(config):
     assert getattr(watcher, "_executor", None) is None
 
 
+# ---- process now requests ------------------------------------------------
+
+
+def test_a_request_starts_a_file_inside_the_stability_window(config):
+    """The button drops the wait, so a settled file starts on the next pass."""
+    from mkvtranscode import control
+
+    config.watch.stable_seconds = 600
+    watcher = make_watcher(config)
+    path = touch(config, "Fresh.mkv")
+
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == []
+
+    control.request_process_now(config)
+    watcher._check_control()
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == [path]
+
+
+def test_a_request_lifts_the_size_floor(config):
+    """A small file is work too, once an operator asked for it."""
+    from mkvtranscode import control
+
+    config.watch.min_size_mb = 100
+    watcher = make_watcher(config)
+    path = touch(config, "Trailer.mkv", size=200 * 1024)
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == []
+
+    control.request_process_now(config)
+    watcher._check_control()
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == [path]
+
+
+def test_a_request_still_respects_the_name_rules(config):
+    """Force never opens a half upload, a sample, or a file of another type."""
+    from mkvtranscode import control
+
+    config.watch.min_size_mb = 0
+    watcher = make_watcher(config)
+    touch(config, ".uploading.mkv")
+    touch(config, "sample.mkv")
+    touch(config, "clip.avi")
+    control.request_process_now(config)
+    watcher._check_control()
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == []
+
+
+def test_a_request_does_not_reopen_a_finished_file(config):
+    from mkvtranscode import control
+
+    watcher = make_watcher(config)
+    path = touch(config, "Once.mkv")
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    control.request_process_now(config)
+    watcher._check_control()
+    watcher._refresh_pending()
+    watcher._service_ready(dry_run=False)
+    assert watcher.pipeline.calls == [path]
+
+
+def test_the_force_window_ends_with_the_request(config):
+    from mkvtranscode import control
+
+    watcher = make_watcher(config)
+    control.request_process_now(config, ttl=0.2)
+    watcher._check_control()
+    assert watcher._forcing() is True
+    time.sleep(0.25)
+    assert watcher._forcing() is False
+
+
+def test_an_expired_request_is_removed_and_does_nothing(config):
+    from mkvtranscode import control
+
+    watcher = make_watcher(config)
+    control.request_process_now(config, ttl=-5)      # already past its expiry
+    watcher._check_control()
+    assert watcher.force_until == 0.0
+    assert not os.path.exists(control.request_path(config))
+
+
 def test_non_media_files_are_ignored(config):
     watcher = make_watcher(config)
     touch(config, "notes.txt")

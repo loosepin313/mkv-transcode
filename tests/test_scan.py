@@ -70,6 +70,29 @@ def test_is_ready_true_after_the_size_stops_changing(config):
     assert is_ready(path, config, previous=previous) is True
 
 
+def test_force_drops_the_stability_wait_only(config):
+    """A forced pass starts a settled file at once, but never a growing one."""
+    from mkvtranscode.scan import Candidate
+
+    config.watch.stable_seconds = 600
+    path = write(os.path.join(config.paths.incoming, "Settled.mkv"), size_kb=400)
+    stat = os.stat(path)
+    fresh = Candidate(path=path, size=stat.st_size, mtime=stat.st_mtime,
+                      observed_at=time.time())
+    assert is_ready(path, config, previous=fresh) is False
+    assert is_ready(path, config, previous=fresh, force=True) is True
+
+    growing = Candidate(path=path, size=1, mtime=0.0, observed_at=0.0)
+    assert is_ready(path, config, previous=growing, force=True) is False
+
+
+def test_min_size_bytes_overrides_the_floor_for_one_pass(config):
+    write(os.path.join(config.paths.incoming, "Clip.mkv"), size_kb=10)
+    config.watch.min_size_mb = 1
+    assert list_candidates(config) == []
+    assert [c.path for c in list_candidates(config, min_size_bytes=0)]
+
+
 def test_open_by_finds_a_process_holding_the_file(config):
     import subprocess
 
