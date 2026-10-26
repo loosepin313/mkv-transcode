@@ -13,7 +13,7 @@ from mkvtranscode import control
 from mkvtranscode.config import Config
 from mkvtranscode.state import DONE, FAILED, RUNNING, JobRecord, State
 from mkvtranscode.status.collector import imdb_search, job_detail, snapshot
-from mkvtranscode.status.server import make_server
+from mkvtranscode.status.server import attachment_headers, make_server
 
 LOG_TEXT = """---- log started ----
 input: /data/incoming/A.mkv
@@ -167,6 +167,24 @@ def fetch_any(port, path):
         return exc.code, exc.read()
 
 
+def fetch_headers(port, path):
+    """Return the response headers for a request."""
+    with urllib.request.urlopen("http://127.0.0.1:%d%s" % (port, path), timeout=5) as done:
+        return done.headers
+
+
+def test_attachment_headers_name_the_download():
+    """The save dialog needs a name, and a non-ASCII name needs filename*."""
+    assert attachment_headers("B (2019).mkv")["Content-Disposition"] == (
+        "attachment; filename=\"B (2019).mkv\"; filename*=UTF-8''B%20%282019%29.mkv"
+    )
+    # A name with no ASCII part still needs a fallback the browser can read.
+    foreign = attachment_headers("Большой.mkv")["Content-Disposition"]
+    assert 'filename="download.mkv"' in foreign and "filename*=UTF-8''" in foreign
+    # A quote in the name cannot break out of the quoted string.
+    assert 'filename="B.mkv"' in attachment_headers('B".mkv')["Content-Disposition"]
+
+
 def test_server_serves_the_page_and_the_json(tmp_path):
     config = make_config(tmp_path)
     seed(config)
@@ -316,6 +334,10 @@ def test_download_route_serves_library_files(tmp_path):
         # A video name is not allowed under the nfo kind.
         assert fetch_any(port, "/api/file?kind=nfo&path=" + rel)[0] == 400
         assert fetch(port, "/api/file?kind=log&path=A.mkv.log")[0] == 200
+        # The header must reach the client. If not, the save dialog names the
+        # file after the route.
+        disposition = fetch_headers(port, "/api/file?kind=output&path=" + rel)["Content-Disposition"]
+        assert 'filename="B (2019).mkv"' in disposition
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -592,6 +614,21 @@ def test_download_list_shows_six_files_at_a_time(tmp_path):
     assert ".half-body.scroll" not in css
     # Six rows of 59.5 px each, so the seventh row stays out of view.
     assert ".half-body.capped{max-height:358px;overflow:auto}" in css
+
+
+def test_download_links_carry_a_file_name(tmp_path):
+    """The href holds a folder path, so the link must name the download."""
+    config = make_config(tmp_path)
+    httpd, worker = with_server(config)
+    port = httpd.server_address[1]
+    try:
+        js = fetch(port, "/app.js")[1].decode("utf-8")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        worker.join(timeout=5)
+    assert 'link.setAttribute("download", baseName(item.path))' in js
+    assert 'link.setAttribute("download", "")' not in js
 
 
 def test_page_carries_an_about_popup(tmp_path):

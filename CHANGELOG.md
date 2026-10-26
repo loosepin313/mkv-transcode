@@ -35,7 +35,9 @@ Status web page.
   watcher, so a stopped watcher stops the page too.
 - The page now has an upload form and a download list. Uploads write into
   `incoming` and stay off until you pass `--allow-upload`. A download link
-  exists for every finished output and its `.nfo`.
+  exists for every finished output and its `.nfo`. Each download names the file
+  on the link and in the `Content-Disposition` header. The save dialog opens
+  with the real name.
 - The queue table now shows why the watcher skips a queued file, such as
   `below min_size_mb` or `ignored name`.
 - Two buttons change something. Both stay off until you pass

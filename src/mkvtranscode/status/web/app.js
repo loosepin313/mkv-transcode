@@ -16,6 +16,13 @@ function bytes(n) {
   return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + " " + units[i];
 }
 
+// The download links carry a folder path, so the save dialog needs the last
+// part of it.
+function baseName(path) {
+  const parts = String(path || "").split("/");
+  return parts[parts.length - 1] || "download";
+}
+
 function dur(seconds) {
   if (seconds === null || seconds === undefined || !isFinite(seconds)) return "—";
   const s = Math.max(0, Math.round(seconds));
@@ -518,7 +525,8 @@ function renderDownloads(items) {
     const link = document.createElement("a");
     link.textContent = item.suffix;
     link.href = "/api/file?kind=" + encodeURIComponent(item.kind) + "&path=" + encodeURIComponent(item.path);
-    link.setAttribute("download", "");
+    // The href has no file name of its own, so name the download here.
+    link.setAttribute("download", baseName(item.path));
     row.appendChild(what);
     row.appendChild(link);
     box.appendChild(row);

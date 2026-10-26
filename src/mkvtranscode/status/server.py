@@ -14,8 +14,8 @@ import signal
 import sqlite3
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Dict
-from urllib.parse import unquote
+from typing import Dict, Optional
+from urllib.parse import quote, unquote
 
 from .. import control
 from ..log import get_logger
@@ -52,6 +52,23 @@ CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'
 log = get_logger("status")
 
 
+def attachment_headers(name: str) -> Dict[str, str]:
+    """Return the headers that name a download for the save dialog.
+
+    The plain ``filename`` carries an ASCII-only fallback. The ``filename*``
+    form carries the real name, so a title with accents keeps its spelling.
+    """
+    clean = name.replace('"', "").replace("\n", "").replace("\r", "")
+    stem, ext = os.path.splitext(clean)
+    stem = stem.encode("ascii", "ignore").decode("ascii").strip()
+    ext = ext.encode("ascii", "ignore").decode("ascii")
+    if not stem:
+        stem = "download"
+    value = ("attachment; filename=\"%s\"; filename*=UTF-8''%s"
+             % (stem + ext, quote(clean, safe="")))
+    return {"Content-Disposition": value}
+
+
 class Handler(BaseHTTPRequestHandler):
     """Serve the page, the assets, and one JSON endpoint."""
 
@@ -79,14 +96,21 @@ class Handler(BaseHTTPRequestHandler):
     def _fail(self, code: int, message: str) -> None:
         self._send(code, message.encode("utf-8"), "text/plain; charset=utf-8")
 
-    def _headers(self, code: int, content_type: str, length: int) -> None:
-        """Send the status line and the shared security headers."""
+    def _headers(self, code: int, content_type: str, length: int,
+                 extra: Optional[Dict[str, str]] = None) -> None:
+        """Send the status line and the shared security headers.
+
+        Every header must go out before ``end_headers``. A header sent after
+        that call sits in the buffer and never reaches the client.
+        """
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(length))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Security-Policy", CSP)
+        for key, value in (extra or {}).items():
+            self.send_header(key, value)
         self.end_headers()
 
     def _query(self) -> Dict:
@@ -101,14 +125,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send_file(self, full: str) -> None:
         """Stream one file as an attachment."""
-        name = os.path.basename(full).replace('"', "").replace("\n", "").replace("\r", "")
         try:
             size = os.path.getsize(full)
         except OSError:
             self._fail(500, "cannot read the file")
             return
-        self._headers(200, "application/octet-stream", size)
-        self.send_header("Content-Disposition", 'attachment; filename="%s"' % name)
+        extra = attachment_headers(os.path.basename(full))
+        self._headers(200, "application/octet-stream", size, extra)
         if self.command == "HEAD":
             return
         try:

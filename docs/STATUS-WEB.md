@@ -72,7 +72,9 @@ ExecStart=/usr/local/bin/mkv-transcode status-web --host 127.0.0.1 --port 9000
 Downloads are always on. The page links to each finished output and its `.nfo`
 under `paths.transcoded`. The download route only opens files inside that
 folder, and only with the extensions it expects. The list shows six files at a
-time and scrolls for the rest.
+time and scrolls for the rest. Each download carries a `Content-Disposition`
+header, and the link carries the same name. The save dialog opens with the real
+file name.
 
 Uploads are off by default, because they write to `incoming`. Turn them on with
 `--allow-upload`:
@@ -220,6 +222,10 @@ The server sends these headers on every response:
 - `Content-Security-Policy: default-src 'none'; style-src 'self'; ...`
 - `X-Content-Type-Options: nosniff`
 - `Cache-Control: no-store`
+
+A download also carries `Content-Disposition: attachment; filename="...";
+filename*=UTF-8''...`. The `filename` part holds an ASCII name for an old
+browser, and the `filename*` part holds the real name.
 
 The server only opens files inside its own `web` folder. A path with `..`
 returns 404. The `/api/job` and `/api/upload` routes take a bare file name, so
